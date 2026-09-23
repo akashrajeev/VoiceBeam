@@ -55,8 +55,8 @@ jobs:
           cd ci
           echo "commit=${{ github.sha }} build=${{ job.status }}" > STATUS.txt
           git init -q -b ci-build
-          git config user.name "AKASH RAJEEV K V"
-          git config user.email "68802546+akashrajeev@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A && git commit -qm "Build results for ${{ github.sha }}"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-build
 
@@ -127,8 +127,8 @@ jobs:
           EOT
           find . -name '*.log' -size +3M -exec sh -c 'tail -c 3000000 "$1" > "$1.t" && mv "$1.t" "$1"' _ {} \;
           git init -q -b ci-results
-          git config user.name "AKASH RAJEEV K V"
-          git config user.email "68802546+akashrajeev@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -qm "CI results for ${{ github.sha }}"
           git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-results
