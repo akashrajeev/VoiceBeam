@@ -46,7 +46,7 @@ class CoreTest {
     }
 
     @Test fun wavRoundTrip() {
-        val f = File.createTempFile("vb", ".wav")
+        val f = File.createTempFile("vbtest", ".wav")
         val n = 16000
         val tone = FloatArray(n) { (0.5 * sin(2 * PI * 440 * it / 16000.0)).toFloat() }
         WavWriter(f, 16000).use { it.write(tone) }

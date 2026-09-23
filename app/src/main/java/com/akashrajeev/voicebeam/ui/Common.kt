@@ -13,7 +13,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,7 +57,7 @@ fun BottomNav(current: Screen, onNavigate: (Screen) -> Unit) {
         horizontalArrangement = Arrangement.SpaceEvenly,
     ) {
         NavItem(Icons.Filled.CenterFocusStrong, "Focus", current == Screen.FOCUS) { onNavigate(Screen.FOCUS) }
-        NavItem(Icons.Filled.ViewList, "Sessions", current == Screen.SESSIONS) { onNavigate(Screen.SESSIONS) }
+        NavItem(Icons.AutoMirrored.Filled.ViewList, "Sessions", current == Screen.SESSIONS) { onNavigate(Screen.SESSIONS) }
         NavItem(Icons.Filled.Settings, "Settings", current == Screen.SETTINGS) { onNavigate(Screen.SETTINGS) }
     }
 }
