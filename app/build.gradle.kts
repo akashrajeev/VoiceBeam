@@ -16,7 +16,7 @@ android {
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
@@ -32,11 +32,12 @@ android {
     buildTypes {
         debug {
             signingConfig = signingConfigs.getByName("shared")
+            // Debug also carries x86_64 so the emulator tests can run it.
+            ndk { abiFilters += listOf("x86_64") }
         }
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("shared")
-            ndk { abiFilters.clear(); abiFilters += listOf("arm64-v8a") }
         }
     }
 
@@ -90,7 +91,6 @@ dependencies {
     implementation("androidx.media3:media3-effect:$media3")
     implementation("androidx.media3:media3-common:$media3")
     implementation("androidx.media3:media3-exoplayer:$media3")
-    implementation("androidx.media3:media3-ui:$media3")
 
     implementation("org.nanohttpd:nanohttpd:2.3.1")
 
