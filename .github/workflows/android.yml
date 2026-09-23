@@ -86,7 +86,7 @@ jobs:
             app/src/androidTest/assets
           key: models-${{ hashFiles('scripts/fetch_models.sh') }}
       - name: Fetch on-device models
-        run: bash scripts/fetch_models.sh > /dev/null 2>&1
+        run: mkdir -p ci && bash scripts/fetch_models.sh > ci/fetch-device.log 2>&1
       - name: Instrumented tests on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -96,11 +96,12 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
-          script: mkdir -p ci && (./gradlew --no-daemon connectedDebugAndroidTest > ci/device.log 2>&1; echo $? > ci/device.exit; adb logcat -d -s VoiceBeamTest VoiceBeamEngine VoiceBeamModels VoiceBeamAudio VoiceBeamUI VoiceBeamVision AndroidRuntime > ci/logcat.txt; exit $(cat ci/device.exit))
+          script: bash scripts/ci_device_tests.sh
       - name: Collect
         if: always()
         run: |
           mkdir -p ci/device-results
+          echo "device job reached collect" > ci/marker.txt
           cp -r app/build/outputs/androidTest-results/connected/* ci/device-results/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
