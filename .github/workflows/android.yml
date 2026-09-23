@@ -79,7 +79,7 @@ jobs:
           target: google_apis
           ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back emulated -camera-front emulated
+          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
           script: ./gradlew --no-daemon connectedDebugAndroidTest
       - name: Upload device test report
         if: always()
