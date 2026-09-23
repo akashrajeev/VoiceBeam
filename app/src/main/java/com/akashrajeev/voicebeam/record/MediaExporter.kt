@@ -168,7 +168,7 @@ object MediaExporter {
                 override fun getOverlaySettings(presentationTimeUs: Long): OverlaySettings = settings
             }
             val item = EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(input)))
-                .setEffects(Effects(ImmutableList.of(), ImmutableList.of(OverlayEffect(ImmutableList.of(overlay)))))
+                .setEffects(Effects(ImmutableList.of(), ImmutableList.of<androidx.media3.common.Effect>(OverlayEffect(ImmutableList.of<androidx.media3.effect.TextureOverlay>(overlay)))))
                 .build()
             Handler(Looper.getMainLooper()).post {
                 val transformer = Transformer.Builder(context)
