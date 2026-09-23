@@ -11,6 +11,7 @@ data class GateInputs(
     val othersSpeaking: Float,   // 0..1, max over other faces
     val voiceMatch: Float?,      // 0..1 from the voice fingerprint, null when not learned yet
     val voiceActive: Boolean,    // is there speech energy in this frame
+    val lockedVisible: Boolean = true, // is the locked face in view right now
 )
 
 /**
@@ -37,7 +38,8 @@ class TargetGate(
         val lips = i.lockedSpeaking
         val voice = i.voiceMatch
         var p = if (voice == null) {
-            lips
+            // Face turned away or covered: no lip evidence, so stay neutral instead of muting them.
+            if (!i.lockedVisible) 0.6f else lips
         } else {
             // Either strong cue is enough; both together is best.
             1f - (1f - lips * 0.9f) * (1f - voice * 0.85f)
@@ -51,7 +53,11 @@ class TargetGate(
         val p = targetProbability(i)
         if (i.voiceActive || !i.hasLock) {
             probability = p
-            if (p > 0.5f) holdLeft = holdMs
+            holdLeft = when {
+                p > 0.5f -> holdMs
+                p < 0.3f -> 0f              // someone else is clearly talking: end the hold now
+                else -> (holdLeft - frameMs).coerceAtLeast(0f)
+            }
         } else {
             holdLeft = (holdLeft - frameMs).coerceAtLeast(0f)
         }

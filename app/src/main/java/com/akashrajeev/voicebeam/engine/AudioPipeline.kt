@@ -43,7 +43,7 @@ class AudioPipeline(
     /** Denoised audio + whether the locked face was clearly talking (consumer: voice-print thread). */
     val voiceQueue = ArrayBlockingQueue<Pair<FloatArray, Float>>(400)
 
-    private val gate = TargetGate()
+    private val gate = TargetGate(frameMs = (models.denoiser.frameShift.takeIf { it > 0 } ?: 256) * 1000f / SAMPLE_RATE)
     private val vad = EnergyVad()
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
