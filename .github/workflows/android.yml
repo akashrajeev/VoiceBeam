@@ -3,8 +3,10 @@ name: Android CI
 on:
   push:
     branches: [ main ]
-  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -26,24 +28,23 @@ jobs:
             app/src/androidTest/assets
           key: models-${{ hashFiles('scripts/fetch_models.sh') }}
       - name: Fetch on-device models
-        run: bash scripts/fetch_models.sh
+        run: mkdir -p ci && bash scripts/fetch_models.sh 2>&1 | tail -40 > ci/fetch.log
       - name: Unit tests
-        run: ./gradlew --no-daemon testDebugUnitTest
+        run: set -o pipefail; ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee ci/unit.log
       - name: Build APKs
-        run: ./gradlew --no-daemon assembleDebug assembleRelease
-      - name: Upload APKs
-        uses: actions/upload-artifact@v4
-        with:
-          name: voicebeam-apk
-          path: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/apk/debug/*.apk
-      - name: Upload unit test report
+        run: set -o pipefail; ./gradlew --no-daemon assembleDebug assembleRelease 2>&1 | tee ci/build.log
+      - name: Collect
         if: always()
-        uses: actions/upload-artifact@v4
+        run: |
+          mkdir -p ci/apk ci/unit-results
+          cp app/build/outputs/apk/release/*.apk ci/apk/ 2>/dev/null || true
+          cp app/build/outputs/apk/debug/*.apk ci/apk/ 2>/dev/null || true
+          cp app/build/test-results/testDebugUnitTest/*.xml ci/unit-results/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: unit-test-report
-          path: app/build/reports/tests/
+          name: build-out
+          path: ci/
 
   device-tests:
     needs: build
@@ -70,7 +71,7 @@ jobs:
             app/src/androidTest/assets
           key: models-${{ hashFiles('scripts/fetch_models.sh') }}
       - name: Fetch on-device models
-        run: bash scripts/fetch_models.sh
+        run: bash scripts/fetch_models.sh > /dev/null 2>&1
       - name: Instrumented tests on emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -80,10 +81,40 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
-          script: ./gradlew --no-daemon connectedDebugAndroidTest
-      - name: Upload device test report
+          script: mkdir -p ci && (./gradlew --no-daemon connectedDebugAndroidTest > ci/device.log 2>&1; echo $? > ci/device.exit; adb logcat -d -s VoiceBeamTest VoiceBeamEngine VoiceBeamModels VoiceBeamAudio VoiceBeamUI VoiceBeamVision AndroidRuntime > ci/logcat.txt; exit $(cat ci/device.exit))
+      - name: Collect
         if: always()
-        uses: actions/upload-artifact@v4
+        run: |
+          mkdir -p ci/device-results
+          cp -r app/build/outputs/androidTest-results/connected/* ci/device-results/ 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: device-test-report
-          path: app/build/reports/androidTests/
+          name: device-out
+          path: ci/
+
+  publish:
+    # Pushes APKs, logs and test results to the ci-results branch so they can be pulled with git.
+    needs: [build, device-tests]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+      - name: Push results
+        run: |
+          cd out
+          cat > STATUS.txt <<EOT
+          commit=${{ github.sha }}
+          run=${{ github.run_id }}
+          build=${{ needs.build.result }}
+          device_tests=${{ needs.device-tests.result }}
+          EOT
+          find . -name '*.log' -size +3M -exec sh -c 'tail -c 3000000 "$1" > "$1.t" && mv "$1.t" "$1"' _ {} \;
+          git init -q -b ci-results
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -qm "CI results for ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-results
