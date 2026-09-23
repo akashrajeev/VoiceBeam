@@ -54,6 +54,7 @@ jobs:
         run: |
           cd ci
           echo "commit=${{ github.sha }} build=${{ job.status }}" > STATUS.txt
+          find . -type f -size +45M -exec sh -c 'split -b 45m "$1" "$1.part-" && rm "$1"' _ {} \;
           git init -q -b ci-build
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -125,6 +126,7 @@ jobs:
           build=${{ needs.build.result }}
           device_tests=${{ needs.device-tests.result }}
           EOT
+          find . -type f -size +45M -exec sh -c 'split -b 45m "$1" "$1.part-" && rm "$1"' _ {} \;
           find . -name '*.log' -size +3M -exec sh -c 'tail -c 3000000 "$1" > "$1.t" && mv "$1.t" "$1"' _ {} \;
           git init -q -b ci-results
           git config user.name "github-actions[bot]"
