@@ -49,6 +49,16 @@ jobs:
         with:
           name: build-out
           path: ci/
+      - name: Push early build results
+        if: always()
+        run: |
+          cd ci
+          echo "commit=${{ github.sha }} build=${{ job.status }}" > STATUS.txt
+          git init -q -b ci-build
+          git config user.name "AKASH RAJEEV K V"
+          git config user.email "68802546+akashrajeev@users.noreply.github.com"
+          git add -A && git commit -qm "Build results for ${{ github.sha }}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" ci-build
 
   device-tests:
     needs: build
