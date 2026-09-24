@@ -65,6 +65,12 @@ class DebugFeedTest {
         }
         compose.waitUntil(15_000) { engine.state.value.lockedId != null }
         android.util.Log.i("VoiceBeamTest", "locked id=" + engine.state.value.lockedId)
+        // Let the UI catch up with the engine so the shot shows the lock ring and chip.
+        compose.waitForIdle()
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(androidx.compose.ui.test.hasText("Locked", substring = true)).fetchSemanticsNodes().isNotEmpty()
+        }
+        Thread.sleep(800)
         shot("2-locked")
 
         // The clip alternates talkers every 15 s; the locked person must light up.
@@ -88,16 +94,29 @@ class DebugFeedTest {
         shot("4-captions")
         assertTrue(engine.state.value.segments.isNotEmpty())
 
+        // Keep listening until the other talker (Aldrin, 15-30 s of each minute) has
+        // produced captions, so the score covers rejection as well as acceptance.
+        fun isArmstrong(ms: Long): Boolean { val m = ms % 60_000; return m in 0..14_999 || m in 30_000..44_999 }
+        try {
+            compose.waitUntil(150_000) {
+                engine.state.value.segments.any { it.text.isNotBlank() && !isArmstrong((it.startMs + it.endMs) / 2) } &&
+                    engine.state.value.segments.any { it.text.isNotBlank() && it.startMs >= 30_000 }
+            }
+        } catch (t: Throwable) {
+            android.util.Log.w("VoiceBeamTest", "other-speaker segments did not arrive in time: " + t.message)
+        }
+
         // Voice-lock accuracy against the clip's known talker schedule.
         val segs = engine.state.value.segments.filter { it.text.isNotBlank() }
-        var ok = 0
+        var ok = 0; var tgt = 0; var tgtOk = 0; var oth = 0; var othOk = 0
         for (seg in segs) {
-            val mid = ((seg.startMs + seg.endMs) / 2) % 60_000
-            val armstrong = (mid in 0..14_999) || (mid in 30_000..44_999)
+            val armstrong = isArmstrong((seg.startMs + seg.endMs) / 2)
+            if (armstrong) { tgt++; if (seg.isTarget) tgtOk++ } else { oth++; if (!seg.isTarget) othOk++ }
             if (armstrong == seg.isTarget) ok++
         }
+        android.util.Log.i("VoiceBeamTest", "voicelock locked-speaker kept=" + tgtOk + "/" + tgt + " other-speaker rejected=" + othOk + "/" + oth)
         android.util.Log.i("VoiceBeamTest", "voicelock acc=" + ok + "/" + segs.size + " (" + (if (segs.isEmpty()) 0 else ok * 100 / segs.size) + "%)")
-        for (seg in segs) android.util.Log.i("VoiceBeamTest", "seg [" + seg.startMs + "-" + seg.endMs + "] target=" + seg.isTarget + " '" + seg.text.take(60) + "'")
+        for (seg in segs) android.util.Log.i("VoiceBeamTest", "seg [" + seg.startMs + "-" + seg.endMs + "] truth=" + (if (isArmstrong((seg.startMs + seg.endMs) / 2)) "locked" else "other") + " target=" + seg.isTarget + " '" + seg.text.take(60) + "'")
     }
 
     private fun shot(name: String) {

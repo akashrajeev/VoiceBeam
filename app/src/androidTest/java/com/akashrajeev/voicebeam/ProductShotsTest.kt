@@ -63,8 +63,16 @@ class ProductShotsTest {
         // back press (a back press with no sheet open finishes the activity).
         compose.onNodeWithText("Focus").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("saveMode").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("saveMode").performClick()
-        Thread.sleep(1500)
+        compose.waitUntil(30_000) { !engine.state.value.recording.active && !engine.state.value.recording.exporting }
+        compose.waitForIdle()
+        fun sheetOpen() = compose.onAllNodes(androidx.compose.ui.test.hasText("Audio only")).fetchSemanticsNodes().isNotEmpty()
+        for (attempt in 1..3) {
+            compose.onNodeWithTag("saveMode").performClick()
+            try { compose.waitUntil(5_000) { sheetOpen() }; break } catch (t: Throwable) {
+                android.util.Log.w("VBSHT", "save sheet not open after click $attempt")
+            }
+        }
+        Thread.sleep(1200)
         shot("p3-save-sheet")
     }
 
