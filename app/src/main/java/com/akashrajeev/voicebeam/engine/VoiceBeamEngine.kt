@@ -277,6 +277,8 @@ class VoiceBeamEngine(private val app: Context) {
         pipeline?.let { it.quietOthers = s.quietOthers; it.boostDb = s.boostDb; it.denoiseMix = s.denoise }
         if (s.stageEnabled != old.stageEnabled) applyStage(s.stageEnabled)
         if (s.useSceneMic != old.useSceneMic && pipeline != null) { stopListening(); startListening() }
+        // Demo feed toggles swap the audio source too (recorded wav vs mic).
+        if (BuildConfig.DEBUG && s.debugFeed != old.debugFeed && pipeline != null) { stopListening(); startListening() }
     }
 
     fun setMonitor(on: Boolean) { pipeline?.monitorEnabled = on }
