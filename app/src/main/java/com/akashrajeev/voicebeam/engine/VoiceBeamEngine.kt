@@ -195,8 +195,11 @@ class VoiceBeamEngine(private val app: Context) {
         _state.update { it.copy(listening = false, partial = "", inputLevel = 0f) }
     }
 
+    private var dbgBlocks = 0
+
     private fun startWorkers(p: AudioPipeline, m: AudioModels) {
         workers.set(true)
+        dbgBlocks = 0
         assembler.reset()
         m.asr.resetStream()
         captionThread = Thread({
@@ -214,6 +217,10 @@ class VoiceBeamEngine(private val app: Context) {
                         val seg = assembler.onBlock(block.size, text, ended, latestProbability, speechy)
                         fill = 0
                         publishCaption(seg)
+                        if (BuildConfig.DEBUG) {
+                            if (seg != null) Log.i("VoiceBeamEngine", "caption seg: '" + seg.text + "' target=" + seg.isTarget)
+                            if (++dbgBlocks % 50 == 0) Log.i("VoiceBeamEngine", "capdbg partial='" + assembler.partial.take(60) + "' text='" + text.take(40) + "' prob=" + latestProbability + " learned=" + (learner?.learned == true) + " rms=" + rms(block))
+                        }
                     }
                 }
             }
@@ -223,8 +230,10 @@ class VoiceBeamEngine(private val app: Context) {
                 val (samples, lip) = p.voiceQueue.poll(200, TimeUnit.MILLISECONDS) ?: continue
                 val l = learner ?: continue
                 if (tracker.lockedId == null) continue
+                val wasLearned = l.learned
                 val score = try { l.feed(samples, lip) } catch (t: Throwable) { null }
                 if (score != null) latestVoiceMatch = score
+                if (BuildConfig.DEBUG && (!wasLearned && l.learned || score != null)) Log.i("VoiceBeamEngine", "voice: learned=" + l.learned + " progress=" + l.progress + " score=" + score + " lip=" + lip)
                 if (l.learned != _state.value.voiceLearned || score != null) {
                     _state.update { it.copy(voiceLearned = l.learned, voiceMatch = latestVoiceMatch) }
                 }
