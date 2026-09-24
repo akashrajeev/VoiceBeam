@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import com.akashrajeev.voicebeam.engine.SaveMode
@@ -27,7 +28,7 @@ class AppFlowTest {
     private fun reachFocus() {
         compose.waitUntil(60_000) { engine.state.value.modelsReady }
         if (compose.onAllNodesWithTagExists("start")) {
-            compose.onNodeWithTag("start").assertIsEnabled().performClick()
+            compose.onNodeWithTag("start").performScrollTo().assertIsEnabled().performClick()
         }
         compose.waitUntil(20_000) { engine.state.value.listening }
     }
