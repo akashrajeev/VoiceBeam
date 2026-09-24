@@ -101,8 +101,22 @@ class DebugFeedTest {
     }
 
     private fun shot(name: String) {
+        // takeScreenshot() intermittently returns null under load; retry a few times.
+        var bmp: Bitmap? = null
+        for (attempt in 1..4) {
+            try {
+                bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
+            } catch (t: Throwable) {
+                Log.w("VBSHT", "shot $name attempt $attempt failed: ${t.message}")
+            }
+            if (bmp != null) break
+            Thread.sleep(600)
+        }
+        if (bmp == null) {
+            Log.w("VBSHT", "shot $name gave up: takeScreenshot returned null")
+            return
+        }
         try {
-            val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return
             val buf = ByteArrayOutputStream()
             bmp.compress(Bitmap.CompressFormat.PNG, 90, buf)
             val b64 = Base64.encodeToString(buf.toByteArray(), Base64.NO_WRAP)
