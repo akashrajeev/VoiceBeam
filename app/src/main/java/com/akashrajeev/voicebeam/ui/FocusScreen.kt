@@ -194,16 +194,16 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                 }
             ) {
                 if (state.imageWidth <= 0) return@Canvas
-                val toView: (Float, Float) -> Pair<Float, Float> = if (demoFeed) {
-                    val fm = FitCenterMapper(state.imageWidth.toFloat(), state.imageHeight.toFloat(), size.width, size.height, state.mirrored)
-                    { x, y -> fm.toView(x, y) }
-                } else {
-                    val fm = FillCenterMapper(state.imageWidth.toFloat(), state.imageHeight.toFloat(), size.width, size.height, state.mirrored)
-                    { x, y -> fm.toView(x, y) }
-                }
+                val iw = state.imageWidth.toFloat()
+                val ih = state.imageHeight.toFloat()
+                val mapper = FillCenterMapper(iw, ih, size.width, size.height, state.mirrored)
+                val fitScale = minOf(size.width / iw, size.height / ih)
+                val fitOx = (size.width - iw * fitScale) / 2f
+                val fitOy = (size.height - ih * fitScale) / 2f
                 for (f in state.faces) {
-                    val (x1, y1) = toView(f.box.left, f.box.top)
-                    val (x2, y2) = toView(f.box.right, f.box.bottom)
+                    // Demo feed is shown letterboxed and never mirrored; the camera fills the view.
+                    val (x1, y1) = if (demoFeed) Pair(fitOx + f.box.left * iw * fitScale, fitOy + f.box.top * ih * fitScale) else mapper.toView(f.box.left, f.box.top)
+                    val (x2, y2) = if (demoFeed) Pair(fitOx + f.box.right * iw * fitScale, fitOy + f.box.bottom * ih * fitScale) else mapper.toView(f.box.right, f.box.bottom)
                     val l = minOf(x1, x2); val r = maxOf(x1, x2)
                     val pad = (r - l) * 0.12f
                     val tl = Offset(l - pad, y1 - pad); val sz = GSize(r - l + 2 * pad, y2 - y1 + 2 * pad)
