@@ -45,25 +45,27 @@ class ProductShotsTest {
         compose.onNodeWithTag("record").performClick()
         compose.waitUntil(30_000) { !engine.state.value.recording.exporting && engine.sessionList.value.size > before }
 
-        // Save-mode sheet.
-        compose.onNodeWithTag("saveMode").performClick()
-        Thread.sleep(1500)
-        shot("p1-save-sheet")
-        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        Thread.sleep(500)
-
         // Big-text caption mode.
         compose.onNodeWithTag("captionMode").performClick()
         compose.onNodeWithTag("captionScreen").assertExists()
         Thread.sleep(1000)
-        shot("p2-caption-mode")
+        shot("p1-caption-mode")
         compose.onNodeWithText("Back to camera").performClick()
+        compose.onNodeWithTag("record").assertExists()
 
         // Sessions list.
         compose.onNodeWithText("Sessions").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("sessionList").fetchSemanticsNodes().isNotEmpty() }
         Thread.sleep(1000)
-        shot("p3-sessions")
+        shot("p2-sessions")
+
+        // Save-mode sheet last: nothing to dismiss afterwards, so no fragile
+        // back press (a back press with no sheet open finishes the activity).
+        compose.onNodeWithText("Focus").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("saveMode").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("saveMode").performClick()
+        Thread.sleep(1500)
+        shot("p3-save-sheet")
     }
 
     private fun shot(name: String) {

@@ -81,8 +81,8 @@ class DebugFeedTest {
         // Aldrin says "the Russians are to be congratulated...".
         compose.waitUntil(180_000) {
             engine.state.value.segments.any {
-                it.text.contains("APPROACH") || it.text.contains("SAFETY") ||
-                    it.text.contains("RUSSIAN") || it.text.contains("CONGRATULATED")
+                val u = it.text.uppercase()
+                u.contains("APPROACH") || u.contains("SAFETY") || u.contains("RUSSIAN") || u.contains("CONGRATULATED")
             }
         }
         shot("4-captions")
