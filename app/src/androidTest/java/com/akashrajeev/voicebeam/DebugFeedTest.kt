@@ -41,6 +41,10 @@ class DebugFeedTest {
         }
         compose.waitUntil(30_000) { engine.state.value.listening }
 
+        // Give the demo branch a moment, then record what the screen looks like.
+        Thread.sleep(8000)
+        shot("0-screen")
+
         // Two faces from the recorded clip (ML Kit on the emulator, MediaPipe on a phone).
         compose.waitUntil(90_000) { engine.state.value.faces.size >= 2 }
         shot("1-faces")

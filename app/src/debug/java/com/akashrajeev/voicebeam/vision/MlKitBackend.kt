@@ -27,13 +27,17 @@ class MlKitBackend(context: Context, private val sink: FaceSink) {
     )
 
     @Volatile private var busy = false
+    private var calls = 0
 
     fun detect(bmp: Bitmap) {
         if (busy) return
         busy = true
+        calls++
+        val n = calls
         detector.process(InputImage.fromBitmap(bmp, 0))
             .addOnSuccessListener { faces ->
                 busy = false
+                if (n % 20 == 1 || faces.isNotEmpty()) android.util.Log.i("VoiceBeamVision", "mlkit faces=" + faces.size + " call=" + n)
                 val obs = faces.map { f ->
                     val b = f.boundingBox
                     val box = Box(
