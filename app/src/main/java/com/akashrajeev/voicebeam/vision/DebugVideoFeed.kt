@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.SystemClock
 import android.util.Log
+import com.akashrajeev.voicebeam.core.Box
 import com.akashrajeev.voicebeam.core.FaceObservation
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
@@ -34,6 +35,8 @@ class DebugVideoFeed(context: Context, private val sink: FaceSink, private val o
     private val fallbackMode: Boolean
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
+    @Volatile private var pinned: List<FaceObservation>? = null
+    @Volatile private var lastCandidates: List<FaceObservation>? = null
 
     init {
         var proc: FaceProcessor? = null
@@ -74,15 +77,27 @@ class DebugVideoFeed(context: Context, private val sink: FaceSink, private val o
                         if (bmp != null) {
                             onFrame(bmp)
                             if (fallbackMode && lips != null) {
-                                processor.process(bmp) // keeps boxes fresh at ML Kit's pace
-                                val entry = lips.optJSONObject(idx - 1)
-                                val faces = latest.get()
-                                if (entry != null && faces.isNotEmpty()) {
-                                    val out = faces.map { f ->
-                                        val v = if (f.box.cx < 0.5f) entry.optDouble("l") else entry.optDouble("r")
-                                        f.copy(mouthOpenness = v.toFloat())
+                                // The two talkers in the composite clip never move, but ML Kit's
+                                // box set flickers on this footage (0/2/4 faces between calls),
+                                // which starved the tracker's lock. Wait for two consecutive
+                                // detections to agree on the two largest boxes, pin them, and
+                                // emit only those with the host-measured lips at 8 fps.
+                                val pin = pinned
+                                if (pin != null) {
+                                    emitLips(pin, idx, lips)
+                                } else {
+                                    processor.process(bmp)
+                                    val cur = latest.get()
+                                    val big2 = cur.sortedByDescending { area(it.box) }.take(2).sortedBy { it.box.cx }
+                                    val prev = lastCandidates
+                                    if (big2.size == 2 && prev != null && prev.size == 2 &&
+                                        big2.indices.all { i -> iou(big2[i].box, prev[i].box) > 0.4f }
+                                    ) {
+                                        pinned = big2
+                                        Log.i("VoiceBeamVision", "debug feed pinned 2 stable face boxes")
                                     }
-                                    sink.onFaces(SystemClock.uptimeMillis(), out, 640, 360)
+                                    lastCandidates = big2
+                                    if (cur.isNotEmpty()) emitLips(cur, idx, lips) // tracking warm-up
                                 }
                             } else {
                                 processor.process(bmp)
@@ -94,6 +109,26 @@ class DebugVideoFeed(context: Context, private val sink: FaceSink, private val o
             } catch (_: InterruptedException) {
             }
         }, "vb-debugvideo").also { it.start() }
+    }
+
+    private fun emitLips(faces: List<FaceObservation>, idx: Int, lips: org.json.JSONArray) {
+        val entry = lips.optJSONObject(idx - 1) ?: return
+        if (faces.isEmpty()) return
+        val out = faces.map { f ->
+            val v = if (f.box.cx < 0.5f) entry.optDouble("l") else entry.optDouble("r")
+            f.copy(mouthOpenness = v.toFloat())
+        }
+        sink.onFaces(SystemClock.uptimeMillis(), out, 640, 360)
+    }
+
+    private fun area(b: Box) = (b.right - b.left) * (b.bottom - b.top)
+
+    private fun iou(a: Box, b: Box): Float {
+        val iw = minOf(a.right, b.right) - maxOf(a.left, b.left)
+        val ih = minOf(a.bottom, b.bottom) - maxOf(a.top, b.top)
+        if (iw <= 0f || ih <= 0f) return 0f
+        val inter = iw * ih
+        return inter / (area(a) + area(b) - inter)
     }
 
     fun stop() {

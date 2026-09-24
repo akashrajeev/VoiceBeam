@@ -3,6 +3,7 @@ package com.akashrajeev.voicebeam
 import android.Manifest
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -57,6 +58,7 @@ class AppFlowTest {
         assertTrue("raw copy saved", s.rawWav.length() > 16000 * 2 * 2)
         assertTrue("srt written", s.srt.exists())
         compose.onNodeWithText("Sessions").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("sessionList").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("sessionList").assertExists()
         compose.onNodeWithText(s.title).assertExists()
     }
