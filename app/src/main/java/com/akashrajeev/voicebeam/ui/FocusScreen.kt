@@ -98,11 +98,14 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
     val analyzer = remember { FaceAnalyzer(context.applicationContext) { t, faces, w, h -> engine.onFaces(t, faces, w, h) } }
     val executor = remember { Executors.newSingleThreadExecutor() }
 
+    val providerHolder = remember { arrayOfNulls<ProcessCameraProvider>(1) }
     DisposableEffect(Unit) {
         engine.startListening()
         onDispose {
+            // Unbind first so CameraX stops handing frames to the analyzer before it closes.
+            try { providerHolder[0]?.unbindAll() } catch (_: Throwable) {}
             engine.stopListening()
-            analyzer.close()
+            executor.execute { analyzer.close() }
             executor.shutdown()
         }
     }
@@ -110,6 +113,7 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
 
     LaunchedEffect(backCamera, settings.hd1080) {
         val provider = ProcessCameraProvider.getInstance(context).let { f -> kotlinx.coroutines.suspendCancellableCoroutine<ProcessCameraProvider> { c -> f.addListener({ c.resume(f.get()) { } }, ContextCompat.getMainExecutor(context)) } }
+        providerHolder[0] = provider
         val selector = if (backCamera) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
         engine.setMirrored(!backCamera)
         val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
@@ -120,7 +124,6 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                 ).build()
             )
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build().also { it.setAnalyzer(executor, analyzer) }
         provider.unbindAll()
         videoBound = try {
@@ -221,6 +224,10 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                             color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
+            }
+            if (!analyzer.available) {
+                Chip("Face tracking isn't available on this device. Captions and noise removal still work.",
+                    Modifier.align(Alignment.TopCenter).padding(top = 60.dp, start = 16.dp, end = 16.dp), color = Card2)
             }
             state.recording.lastMessage?.let {
                 Chip(it, Modifier.align(Alignment.TopCenter).padding(top = 90.dp), color = Card2)

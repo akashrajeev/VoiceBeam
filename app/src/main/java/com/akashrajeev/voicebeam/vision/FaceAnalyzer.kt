@@ -89,5 +89,7 @@ class FaceAnalyzer(
         onFaces(SystemClock.uptimeMillis(), faces, lastW, lastH)
     }
 
+    val available: Boolean get() = landmarker != null
+
     fun close() { landmarker?.close(); landmarker = null }
 }
