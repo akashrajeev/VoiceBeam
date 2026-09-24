@@ -37,7 +37,16 @@ class MlKitBackend(context: Context, private val sink: FaceSink) {
         detector.process(InputImage.fromBitmap(bmp, 0))
             .addOnSuccessListener { faces ->
                 busy = false
-                if (n % 20 == 1 || faces.isNotEmpty()) android.util.Log.i("VoiceBeamVision", "mlkit faces=" + faces.size + " call=" + n)
+                if (n % 20 == 1) {
+                    val lips = faces.joinToString { f ->
+                        val up = f.getContour(FaceContour.UPPER_LIP_BOTTOM)?.points
+                        val lo = f.getContour(FaceContour.LOWER_LIP_TOP)?.points
+                        if (!up.isNullOrEmpty() && !lo.isNullOrEmpty())
+                            "%.3f".format((lo.map { it.y }.average() - up.map { it.y }.average()) / f.boundingBox.height().coerceAtLeast(1))
+                        else "?"
+                    }
+                    android.util.Log.i("VoiceBeamVision", "mlkit faces=" + faces.size + " call=" + n + " lips=" + lips)
+                }
                 val obs = faces.map { f ->
                     val b = f.boundingBox
                     val box = Box(

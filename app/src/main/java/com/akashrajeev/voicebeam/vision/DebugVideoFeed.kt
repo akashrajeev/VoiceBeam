@@ -32,8 +32,9 @@ class DebugVideoFeed(context: Context, sink: FaceSink, private val onFrame: (Bit
                 val started = SystemClock.uptimeMillis()
                 var lastIdx = -1
                 while (running.get()) {
-                    // 240 frames at 4 fps = 60 s loop, matching the clip.
-                    val idx = (((SystemClock.uptimeMillis() - started) / 250L) % 240L).toInt() + 1
+                    // 480 frames at 8 fps = 60 s loop, matching the clip. The lip
+                    // gate needs several samples inside its 700 ms window.
+                    val idx = (((SystemClock.uptimeMillis() - started) / 125L) % 480L).toInt() + 1
                     if (idx != lastIdx) {
                         lastIdx = idx
                         val name = "feed/frames/f%04d.jpg".format(idx)
@@ -48,7 +49,7 @@ class DebugVideoFeed(context: Context, sink: FaceSink, private val onFrame: (Bit
                             processor.process(bmp)
                         }
                     }
-                    Thread.sleep(60)
+                    Thread.sleep(40)
                 }
             } catch (_: InterruptedException) {
             }

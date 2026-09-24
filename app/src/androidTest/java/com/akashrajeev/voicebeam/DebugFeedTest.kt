@@ -49,16 +49,31 @@ class DebugFeedTest {
         compose.waitUntil(90_000) { engine.state.value.faces.size >= 2 }
         shot("1-faces")
 
-        // Tap the left face (Armstrong) and lock on.
+        // Tap the leftmost detected face (Armstrong) at its actual centre.
+        val target = compose.runOnUiThread {
+            val st = engine.state.value
+            st.faces.minByOrNull { it.box.cx }?.let { f -> Triple(f.box.cx, f.box.cy, st.imageWidth to st.imageHeight) }
+        } ?: error("no face to tap")
+        val (tnx, tny, dims) = target
+        val (iw, ih) = dims
         compose.onNodeWithTag("faces").performTouchInput {
-            down(androidx.compose.ui.geometry.Offset(width * 0.25f, height * 0.5f))
+            val fitScale = minOf(width / iw.toFloat(), height / ih.toFloat())
+            val fitOx = (width - iw * fitScale) / 2f
+            val fitOy = (height - ih * fitScale) / 2f
+            down(androidx.compose.ui.geometry.Offset(fitOx + tnx * iw * fitScale, fitOy + tny * ih * fitScale))
             up()
         }
         compose.waitUntil(15_000) { engine.state.value.lockedId != null }
+        android.util.Log.i("VoiceBeamTest", "locked id=" + engine.state.value.lockedId)
         shot("2-locked")
 
         // The clip alternates talkers every 15 s; the locked person must light up.
-        compose.waitUntil(75_000) { engine.state.value.lockedSpeaking > 0.35f }
+        var polls = 0
+        compose.waitUntil(75_000) {
+            val st = engine.state.value
+            if (++polls % 40 == 0) android.util.Log.i("VoiceBeamTest", "lockedSpeaking=" + st.lockedSpeaking + " locked=" + st.lockedId + " faces=" + st.faces.size)
+            st.lockedSpeaking > 0.35f
+        }
         shot("3-speaking")
 
         // Captions from the clip's speech. Ground truth from an offline run of the
