@@ -116,7 +116,7 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
             pl.play()
         }
     }
-    val demoFeeder = remember(demoFeed) { if (!demoFeed) null else DebugVideoFeed(context.applicationContext, FaceSink { t, faces, w, h -> engine.onFaces(t, faces, w, h) }) }
+    val demoFeeder = remember(demoFeed) { if (!demoFeed) null else DebugVideoFeed(context.applicationContext, surfaceView, FaceSink { t, faces, w, h -> engine.onFaces(t, faces, w, h) }) }
     val executor = remember { Executors.newSingleThreadExecutor() }
 
     val providerHolder = remember { arrayOfNulls<ProcessCameraProvider>(1) }
