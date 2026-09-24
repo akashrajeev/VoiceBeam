@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference
  * the host by the same MediaPipe face landmarker the app ships (lips.json).
  * Everything downstream - tracking, LipActivity, the gate - is the real code.
  */
-class DebugVideoFeed(context: Context, sink: FaceSink, private val onFrame: (Bitmap) -> Unit) {
+class DebugVideoFeed(context: Context, private val sink: FaceSink, private val onFrame: (Bitmap) -> Unit) {
 
     private val app = context.applicationContext
     private val latest = AtomicReference<List<FaceObservation>>(emptyList())
