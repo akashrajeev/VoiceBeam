@@ -37,6 +37,9 @@ class FaceProcessor(context: Context, private val sink: FaceSink) {
 
     val available: Boolean get() = landmarker != null || mlkit != null
 
+    /** True when running on the debug-only ML Kit fallback (x86_64 emulators). */
+    val usingFallback: Boolean get() = landmarker == null && mlkit != null
+
     init {
         landmarker = create(context, Delegate.GPU) ?: create(context, Delegate.CPU)
         if (landmarker == null) {
