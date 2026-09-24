@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -74,6 +75,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.view.SurfaceView
+import android.widget.ImageView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -105,18 +107,18 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
     val demoFeed = BuildConfig.DEBUG && settings.debugFeed
     val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER; implementationMode = PreviewView.ImplementationMode.COMPATIBLE } }
     val analyzer = remember(demoFeed) { if (demoFeed) null else FaceAnalyzer(context.applicationContext) { t, faces, w, h -> engine.onFaces(t, faces, w, h) } }
-    val surfaceView = remember { SurfaceView(context) }
-    val demoPlayer = remember(demoFeed) {
-        if (!demoFeed) null else ExoPlayer.Builder(context).build().also { pl ->
-            pl.setVideoSurfaceView(surfaceView)
-            pl.setMediaItem(MediaItem.fromUri("asset:///feed/test_feed.mp4"))
-            pl.repeatMode = Player.REPEAT_MODE_ALL
-            pl.volume = 0f
-            pl.prepare()
-            pl.play()
+    val mainHandler = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    val demoImage = remember(demoFeed) {
+        if (!demoFeed) null else ImageView(context).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(android.graphics.Color.BLACK)
         }
     }
-    val demoFeeder = remember(demoFeed) { if (!demoFeed) null else DebugVideoFeed(context.applicationContext, surfaceView, FaceSink { t, faces, w, h -> engine.onFaces(t, faces, w, h) }) }
+    val demoFeeder = remember(demoFeed) {
+        if (!demoFeed) null else DebugVideoFeed(context.applicationContext, FaceSink { t, faces, w, h -> engine.onFaces(t, faces, w, h) }) { bmp ->
+            mainHandler.post { demoImage?.setImageBitmap(bmp) }
+        }
+    }
     val executor = remember { Executors.newSingleThreadExecutor() }
 
     val providerHolder = remember { arrayOfNulls<ProcessCameraProvider>(1) }
@@ -133,7 +135,6 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
             // Unbind first so CameraX stops handing frames to the analyzer before it closes.
             try { providerHolder[0]?.unbindAll() } catch (_: Throwable) {}
             demoFeeder?.stop()
-            demoPlayer?.release()
             executor.execute { analyzer?.close() }
         }
     }
@@ -184,7 +185,11 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
 
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            AndroidView({ if (demoFeed) surfaceView else previewView }, Modifier.fillMaxSize())
+            // key() forces AndroidView to recreate when the feed flips; its factory
+            // lambda only runs once, so without it the camera preview stays attached.
+            key(demoFeed) {
+                AndroidView({ if (demoFeed) demoImage ?: previewView else previewView }, Modifier.fillMaxSize())
+            }
             // Face rings + tap to lock.
             Canvas(
                 Modifier.fillMaxSize().testTag("faces").pointerInput(state.imageWidth, state.imageHeight, state.mirrored) {
