@@ -46,7 +46,10 @@ class DebugFeedTest {
         shot("1-faces")
 
         // Tap the left face (Armstrong) and lock on.
-        compose.onNodeWithTag("faces").performTouchInput { click(androidx.compose.ui.geometry.Offset(width * 0.25f, height * 0.5f)) }
+        compose.onNodeWithTag("faces").performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(width * 0.25f, height * 0.5f))
+            up()
+        }
         compose.waitUntil(15_000) { engine.state.value.lockedId != null }
         shot("2-locked")
 
