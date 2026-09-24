@@ -87,6 +87,17 @@ class DebugFeedTest {
         }
         shot("4-captions")
         assertTrue(engine.state.value.segments.isNotEmpty())
+
+        // Voice-lock accuracy against the clip's known talker schedule.
+        val segs = engine.state.value.segments.filter { it.text.isNotBlank() }
+        var ok = 0
+        for (seg in segs) {
+            val mid = ((seg.startMs + seg.endMs) / 2) % 60_000
+            val armstrong = (mid in 0..14_999) || (mid in 30_000..44_999)
+            if (armstrong == seg.isTarget) ok++
+        }
+        android.util.Log.i("VoiceBeamTest", "voicelock acc=" + ok + "/" + segs.size + " (" + (if (segs.isEmpty()) 0 else ok * 100 / segs.size) + "%)")
+        for (seg in segs) android.util.Log.i("VoiceBeamTest", "seg [" + seg.startMs + "-" + seg.endMs + "] target=" + seg.isTarget + " '" + seg.text.take(60) + "'")
     }
 
     private fun shot(name: String) {

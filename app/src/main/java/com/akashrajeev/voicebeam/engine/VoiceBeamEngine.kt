@@ -207,10 +207,12 @@ class VoiceBeamEngine(private val app: Context) {
     }
 
     private var dbgBlocks = 0
+    private var capWallStart = 0L
 
     private fun startWorkers(p: AudioPipeline, m: AudioModels) {
         workers.set(true)
         dbgBlocks = 0
+        capWallStart = SystemClock.uptimeMillis()
         assembler.reset()
         m.asr.resetStream()
         captionThread = Thread({
@@ -230,6 +232,7 @@ class VoiceBeamEngine(private val app: Context) {
                         publishCaption(seg)
                         if (BuildConfig.DEBUG) {
                             if (seg != null) Log.i("VoiceBeamEngine", "caption seg: '" + seg.text + "' target=" + seg.isTarget)
+                            if (seg != null) Log.i("VoiceBeamPerf", "caplat ms=" + (SystemClock.uptimeMillis() - capWallStart - seg.endMs))
                             if (++dbgBlocks % 50 == 0) Log.i("VoiceBeamEngine", "capdbg partial='" + assembler.partial.take(60) + "' text='" + text.take(40) + "' prob=" + latestProbability + " learned=" + (learner?.learned == true) + " rms=" + rms(block))
                         }
                     }
