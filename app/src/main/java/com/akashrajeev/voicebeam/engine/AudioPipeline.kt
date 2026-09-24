@@ -51,6 +51,7 @@ class AudioPipeline(
     private val vad = EnergyVad()
     private val running = AtomicBoolean(false)
     private var thread: Thread? = null
+    private var dbgFrames = 0L
 
     @SuppressLint("MissingPermission")
     fun start(useSceneMic: Boolean) {
@@ -152,6 +153,10 @@ class AudioPipeline(
                     if (!voiceQueue.offer(v)) { voiceQueue.poll(); voiceQueue.offer(v) }
                 }
                 onFrame(FrameInfo(sqrt(e / n), g, gate.probability, voice))
+                if (com.akashrajeev.voicebeam.BuildConfig.DEBUG && ++dbgFrames % 400 == 0L) {
+                    var er = 0f; for (k in 0 until input.size) er += input[k] * input[k]
+                    Log.i("VoiceBeamAudio", "audiodbg dbg=" + (dbg != null) + " in=" + kotlin.math.sqrt(er / input.size) + " clean=" + kotlin.math.sqrt(e / n) + " g=" + g)
+                }
             }
         } catch (t: Throwable) {
             Log.e("VoiceBeamAudio", "audio loop failed", t)

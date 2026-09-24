@@ -167,17 +167,28 @@ class VoiceBeamEngine(private val app: Context) {
 
     // ---------- listening ----------
 
+    private var pipelineDebugFeed = false
+
     fun startListening() {
         val m = models ?: return
-        if (pipeline != null) return
         val s = _settings.value
+        val wantDebug = BuildConfig.DEBUG && s.debugFeed
+        // The engine is app-scoped and activities come and go (and tests share
+        // one engine), so a pipeline may already be running on the other audio
+        // source. Restart it when the requested source differs.
+        if (pipeline != null) {
+            if (pipelineDebugFeed == wantDebug) return
+            stopListening()
+        }
+        if (BuildConfig.DEBUG) Log.i("VoiceBeamEngine", "startListening source=" + (if (wantDebug) "debug wav" else "mic"))
         val p = AudioPipeline(m, ::gateInputs) { f ->
             latestProbability = f.probability
             _state.update { it.copy(inputLevel = f.level, gain = f.gain, targetProbability = f.probability) }
         }
         p.quietOthers = s.quietOthers; p.boostDb = s.boostDb; p.denoiseMix = s.denoise
         pipeline = p
-        if (BuildConfig.DEBUG && s.debugFeed) {
+        pipelineDebugFeed = wantDebug
+        if (wantDebug) {
             val feed = DebugAudioFeed(app)
             p.debugFeed = feed::next
         }
