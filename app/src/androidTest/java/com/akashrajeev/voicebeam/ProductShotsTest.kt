@@ -1,0 +1,86 @@
+package com.akashrajeev.voicebeam
+
+import android.Manifest
+import android.graphics.Bitmap
+import android.util.Base64
+import android.util.Log
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.RuleChain
+import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
+
+/** Captures product screenshots (caption mode, save sheet, sessions) for review. */
+@RunWith(AndroidJUnit4::class)
+class ProductShotsTest {
+    private val perms = GrantPermissionRule.grant(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
+    private val compose = createAndroidComposeRule<MainActivity>()
+    @get:Rule val chain: RuleChain = RuleChain.outerRule(perms).around(compose)
+
+    private val engine get() = (compose.activity.application as VoiceBeamApp).engine
+
+    @Test fun captureProductScreens() {
+        compose.runOnUiThread { engine.updateSettings { it.copy(onboarded = true) } }
+        compose.waitUntil(90_000) { engine.state.value.modelsReady }
+        if (compose.onAllNodesWithTag("start").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithTag("start").performScrollTo().assertIsEnabled().performClick()
+        }
+        compose.waitUntil(30_000) { engine.state.value.listening }
+
+        // A short recording so the Sessions screen has a real row.
+        val before = engine.sessionList.value.size
+        compose.onNodeWithTag("record").performClick()
+        compose.waitUntil(5_000) { engine.state.value.recording.active }
+        Thread.sleep(3000)
+        compose.onNodeWithTag("record").performClick()
+        compose.waitUntil(30_000) { !engine.state.value.recording.exporting && engine.sessionList.value.size > before }
+
+        // Save-mode sheet.
+        compose.onNodeWithTag("saveMode").performClick()
+        Thread.sleep(1500)
+        shot("p1-save-sheet")
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        Thread.sleep(500)
+
+        // Big-text caption mode.
+        compose.onNodeWithTag("captionMode").performClick()
+        compose.onNodeWithTag("captionScreen").assertExists()
+        Thread.sleep(1000)
+        shot("p2-caption-mode")
+        compose.onNodeWithText("Back to camera").performClick()
+
+        // Sessions list.
+        compose.onNodeWithText("Sessions").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("sessionList").fetchSemanticsNodes().isNotEmpty() }
+        Thread.sleep(1000)
+        shot("p3-sessions")
+    }
+
+    private fun shot(name: String) {
+        try {
+            val bmp = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot() ?: return
+            val buf = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.PNG, 90, buf)
+            val b64 = Base64.encodeToString(buf.toByteArray(), Base64.NO_WRAP)
+            Log.i("VBSHT", "BEGIN $name")
+            var i = 0
+            while (i < b64.length) {
+                Log.i("VBSHT", "D " + b64.substring(i, minOf(i + 3000, b64.length)))
+                i += 3000
+            }
+            Log.i("VBSHT", "END $name")
+        } catch (t: Throwable) {
+            Log.w("VBSHT", "shot failed: ${t.message}")
+        }
+    }
+}
