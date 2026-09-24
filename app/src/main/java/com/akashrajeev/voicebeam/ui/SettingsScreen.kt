@@ -55,6 +55,10 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SwitchRow("1080p video", "Bigger files; 720p is plenty for most phones", s.hd1080) { v -> engine.updateSettings { it.copy(hd1080 = v) } }
             SectionHeader("Stage captions (PC)")
             SwitchRow("Share captions on local Wi-Fi", state.stageUrl?.let { "Open $it on a laptop" } ?: "Shows big captions in a laptop browser", s.stageEnabled) { v -> engine.updateSettings { it.copy(stageEnabled = v) } }
+            if (BuildConfig.DEBUG) {
+                SectionHeader("Testing")
+                SwitchRow("Demo feed (testing)", "Plays a recorded two-person clip instead of the camera and mic", s.debugFeed) { v -> engine.updateSettings { it.copy(debugFeed = v) } }
+            }
             SectionHeader("Privacy")
             Text("Speech recognition, noise removal, face tracking and voice matching all run on this phone. VoiceBeam has no account and uploads nothing. The only network use is the optional stage-caption page on your own Wi-Fi.",
                 color = Muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))

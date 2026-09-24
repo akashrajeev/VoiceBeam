@@ -85,6 +85,8 @@ dependencies {
     implementation("androidx.camera:camera-video:$camerax")
 
     implementation("com.google.mediapipe:tasks-vision:0.10.14")
+    // Debug only: face fallback for x86_64 emulators (MediaPipe ships arm64-only).
+    debugImplementation("com.google.android.gms:play-services-mlkit-face-detection:17.1.0")
 
     val media3 = "1.4.1"
     implementation("androidx.media3:media3-transformer:$media3")

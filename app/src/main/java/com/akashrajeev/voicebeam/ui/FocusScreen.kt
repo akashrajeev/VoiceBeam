@@ -73,7 +73,15 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import android.view.SurfaceView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
+import com.akashrajeev.voicebeam.BuildConfig
 import com.akashrajeev.voicebeam.Screen
+import com.akashrajeev.voicebeam.core.FitCenterMapper
+import com.akashrajeev.voicebeam.vision.DebugVideoFeed
+import com.akashrajeev.voicebeam.vision.FaceSink
 import com.akashrajeev.voicebeam.core.Captions
 import com.akashrajeev.voicebeam.core.FillCenterMapper
 import com.akashrajeev.voicebeam.engine.CaptionBurn
@@ -94,8 +102,21 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
     var backCamera by rememberSaveable { mutableStateOf(true) }
     var videoBound by remember { mutableStateOf(false) }
     var showSheet by remember { mutableStateOf(false) }
+    val demoFeed = BuildConfig.DEBUG && settings.debugFeed
     val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER; implementationMode = PreviewView.ImplementationMode.COMPATIBLE } }
-    val analyzer = remember { FaceAnalyzer(context.applicationContext) { t, faces, w, h -> engine.onFaces(t, faces, w, h) } }
+    val analyzer = remember { if (demoFeed) null else FaceAnalyzer(context.applicationContext) { t, faces, w, h -> engine.onFaces(t, faces, w, h) } }
+    val surfaceView = remember { SurfaceView(context) }
+    val demoPlayer = remember {
+        if (!demoFeed) null else ExoPlayer.Builder(context).build().also { pl ->
+            pl.setVideoSurfaceView(surfaceView)
+            pl.setMediaItem(MediaItem.fromUri("asset:///feed/test_feed.mp4"))
+            pl.repeatMode = Player.REPEAT_MODE_ALL
+            pl.volume = 0f
+            pl.prepare()
+            pl.play()
+        }
+    }
+    val demoFeeder = remember { if (!demoFeed) null else DebugVideoFeed(context.applicationContext, FaceSink { t, faces, w, h -> engine.onFaces(t, faces, w, h) }) }
     val executor = remember { Executors.newSingleThreadExecutor() }
 
     val providerHolder = remember { arrayOfNulls<ProcessCameraProvider>(1) }
@@ -105,13 +126,21 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
             // Unbind first so CameraX stops handing frames to the analyzer before it closes.
             try { providerHolder[0]?.unbindAll() } catch (_: Throwable) {}
             engine.stopListening()
-            executor.execute { analyzer.close() }
+            demoFeeder?.stop()
+            demoPlayer?.release()
+            executor.execute { analyzer?.close() }
             executor.shutdown()
         }
     }
     LaunchedEffect(state.modelsReady) { if (state.modelsReady) engine.startListening() }
 
-    LaunchedEffect(backCamera, settings.hd1080) {
+    LaunchedEffect(backCamera, settings.hd1080, demoFeed) {
+        if (demoFeed) {
+            engine.setMirrored(false)
+            videoBound = false
+            demoFeeder?.start()
+            return@LaunchedEffect
+        }
         val provider = ProcessCameraProvider.getInstance(context).let { f -> kotlinx.coroutines.suspendCancellableCoroutine<ProcessCameraProvider> { c -> f.addListener({ c.resume(f.get()) { } }, ContextCompat.getMainExecutor(context)) } }
         providerHolder[0] = provider
         val selector = if (backCamera) CameraSelector.DEFAULT_BACK_CAMERA else CameraSelector.DEFAULT_FRONT_CAMERA
@@ -124,7 +153,7 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                 ).build()
             )
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build().also { it.setAnalyzer(executor, analyzer) }
+            .build().also { a -> analyzer?.let { an -> a.setAnalyzer(executor, an) } }
         provider.unbindAll()
         videoBound = try {
             provider.bindToLifecycle(lifecycleOwner, selector, preview, analysis, engine.buildVideoCapture())
@@ -149,24 +178,32 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
 
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            AndroidView({ previewView }, Modifier.fillMaxSize())
+            AndroidView({ if (demoFeed) surfaceView else previewView }, Modifier.fillMaxSize())
             // Face rings + tap to lock.
             Canvas(
                 Modifier.fillMaxSize().testTag("faces").pointerInput(state.imageWidth, state.imageHeight, state.mirrored) {
                     detectTapGestures { pos ->
                         if (state.imageWidth > 0) {
-                            val m = FillCenterMapper(state.imageWidth.toFloat(), state.imageHeight.toFloat(), size.width.toFloat(), size.height.toFloat(), state.mirrored)
-                            val (nx, ny) = m.toImage(pos.x, pos.y)
+                            val (nx, ny) = if (demoFeed)
+                                FitCenterMapper(state.imageWidth.toFloat(), state.imageHeight.toFloat(), size.width.toFloat(), size.height.toFloat(), state.mirrored).toImage(pos.x, pos.y)
+                            else
+                                FillCenterMapper(state.imageWidth.toFloat(), state.imageHeight.toFloat(), size.width.toFloat(), size.height.toFloat(), state.mirrored).toImage(pos.x, pos.y)
                             engine.lockAt(nx, ny)
                         }
                     }
                 }
             ) {
                 if (state.imageWidth <= 0) return@Canvas
-                val m = FillCenterMapper(state.imageWidth.toFloat(), state.imageHeight.toFloat(), size.width, size.height, state.mirrored)
+                val toView: (Float, Float) -> Pair<Float, Float> = if (demoFeed) {
+                    val fm = FitCenterMapper(state.imageWidth.toFloat(), state.imageHeight.toFloat(), size.width, size.height, state.mirrored)
+                    { x, y -> fm.toView(x, y) }
+                } else {
+                    val fm = FillCenterMapper(state.imageWidth.toFloat(), state.imageHeight.toFloat(), size.width, size.height, state.mirrored)
+                    { x, y -> fm.toView(x, y) }
+                }
                 for (f in state.faces) {
-                    val (x1, y1) = m.toView(f.box.left, f.box.top)
-                    val (x2, y2) = m.toView(f.box.right, f.box.bottom)
+                    val (x1, y1) = toView(f.box.left, f.box.top)
+                    val (x2, y2) = toView(f.box.right, f.box.bottom)
                     val l = minOf(x1, x2); val r = maxOf(x1, x2)
                     val pad = (r - l) * 0.12f
                     val tl = Offset(l - pad, y1 - pad); val sz = GSize(r - l + 2 * pad, y2 - y1 + 2 * pad)
@@ -225,7 +262,10 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                     }
                 }
             }
-            if (!analyzer.available) {
+            if (demoFeed) {
+                Chip("Demo feed - recorded test clip", Modifier.align(Alignment.TopCenter).padding(top = 30.dp, start = 16.dp, end = 16.dp), color = Card2)
+            }
+            if (analyzer?.available == false || demoFeeder?.available == false) {
                 Chip("Face tracking isn't available on this device. Captions and noise removal still work.",
                     Modifier.align(Alignment.TopCenter).padding(top = 60.dp, start = 16.dp, end = 16.dp), color = Card2)
             }

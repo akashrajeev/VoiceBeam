@@ -15,6 +15,7 @@ data class Settings(
     val captionSize: Int = 1,           // 0 small, 1 medium, 2 large
     val onboarded: Boolean = false,
     val hd1080: Boolean = false,
+    val debugFeed: Boolean = false,
 )
 
 class SettingsStore(context: Context) {
@@ -33,6 +34,7 @@ class SettingsStore(context: Context) {
         captionSize = p.getInt("capSize", 1),
         onboarded = p.getBoolean("onboarded", false),
         hd1080 = p.getBoolean("hd1080", false),
+        debugFeed = p.getBoolean("dbgFeed", false),
     )
 
     fun save(s: Settings) {
@@ -40,7 +42,7 @@ class SettingsStore(context: Context) {
             .putFloat("quiet", s.quietOthers).putFloat("boost", s.boostDb).putFloat("denoise", s.denoise)
             .putBoolean("sceneMic", s.useSceneMic).putString("saveMode", s.saveMode.name).putString("burn", s.captionBurn.name)
             .putBoolean("others", s.showOthersCaptions).putBoolean("raw", s.keepRawAudio).putBoolean("stage", s.stageEnabled)
-            .putInt("capSize", s.captionSize).putBoolean("onboarded", s.onboarded).putBoolean("hd1080", s.hd1080)
+            .putInt("capSize", s.captionSize).putBoolean("onboarded", s.onboarded).putBoolean("hd1080", s.hd1080).putBoolean("dbgFeed", s.debugFeed)
             .apply()
     }
 }

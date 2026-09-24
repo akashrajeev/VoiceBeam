@@ -15,6 +15,7 @@ import androidx.camera.video.Recording
 import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
 import androidx.core.content.ContextCompat
+import com.akashrajeev.voicebeam.BuildConfig
 import com.akashrajeev.voicebeam.core.CaptionSegment
 import com.akashrajeev.voicebeam.core.Captions
 import com.akashrajeev.voicebeam.core.FaceObservation
@@ -176,6 +177,10 @@ class VoiceBeamEngine(private val app: Context) {
         }
         p.quietOthers = s.quietOthers; p.boostDb = s.boostDb; p.denoiseMix = s.denoise
         pipeline = p
+        if (BuildConfig.DEBUG && s.debugFeed) {
+            val feed = DebugAudioFeed(app)
+            p.debugFeed = feed::next
+        }
         p.start(s.useSceneMic)
         startWorkers(p, m)
         _state.update { it.copy(listening = true, earphones = earphoneName()) }

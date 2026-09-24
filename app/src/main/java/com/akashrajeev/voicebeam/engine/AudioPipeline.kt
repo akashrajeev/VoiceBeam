@@ -9,6 +9,7 @@ import android.media.MediaRecorder
 import android.media.MicrophoneDirection
 import android.os.Build
 import android.os.Process
+import android.os.SystemClock
 import android.util.Log
 import com.akashrajeev.voicebeam.core.EnergyVad
 import com.akashrajeev.voicebeam.core.GateInputs
@@ -23,6 +24,7 @@ import kotlin.math.sqrt
 /**
  * Mic -> noise removal -> target gate -> earphones, with side outputs for
  * captions, the voice fingerprint and recording. Runs on its own thread.
+ * When [debugFeed] is set (debug builds only), bundled samples replace the mic.
  */
 class AudioPipeline(
     private val models: AudioModels,
@@ -37,6 +39,8 @@ class AudioPipeline(
     @Volatile var monitorEnabled = true    // play to earphones
     @Volatile var rawWriter: WavWriter? = null
     @Volatile var cleanWriter: WavWriter? = null
+    /** Debug builds only: when set, called with the frame size to produce mic input. */
+    @Volatile var debugFeed: ((Int) -> FloatArray)? = null
 
     /** Gated clean audio for captions (consumer: caption thread). */
     val asrQueue = ArrayBlockingQueue<FloatArray>(400)
@@ -64,42 +68,59 @@ class AudioPipeline(
     private fun loop(useSceneMic: Boolean) {
         Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
         val frameShift = models.denoiser.frameShift.takeIf { it > 0 } ?: 256
-        val minRec = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT)
-        val source = if (useSceneMic) MediaRecorder.AudioSource.CAMCORDER else MediaRecorder.AudioSource.VOICE_RECOGNITION
-        val rec = try {
-            AudioRecord(source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT, maxOf(minRec, frameShift * 8))
-        } catch (t: Throwable) {
-            AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT, maxOf(minRec, frameShift * 8))
+        val dbg = debugFeed
+        val rec = if (dbg != null) null else {
+            val minRec = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT)
+            val source = if (useSceneMic) MediaRecorder.AudioSource.CAMCORDER else MediaRecorder.AudioSource.VOICE_RECOGNITION
+            try {
+                AudioRecord(source, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT, maxOf(minRec, frameShift * 8))
+            } catch (t: Throwable) {
+                AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_FLOAT, maxOf(minRec, frameShift * 8))
+            }
         }
-        if (Build.VERSION.SDK_INT >= 29) {
+        if (rec != null && Build.VERSION.SDK_INT >= 29) {
             try {
                 rec.setPreferredMicrophoneDirection(
                     if (useSceneMic) MicrophoneDirection.MIC_DIRECTION_AWAY_FROM_USER else MicrophoneDirection.MIC_DIRECTION_UNSPECIFIED
                 )
             } catch (_: Throwable) {}
         }
-        val minPlay = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
-            .setAudioFormat(AudioFormat.Builder().setSampleRate(SAMPLE_RATE).setEncoding(AudioFormat.ENCODING_PCM_FLOAT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
-            .setBufferSizeInBytes(maxOf(minPlay, frameShift * 4 * 4))
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-            .build()
+        val track = if (dbg != null) null else {
+            val minPlay = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
+            AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+                .setAudioFormat(AudioFormat.Builder().setSampleRate(SAMPLE_RATE).setEncoding(AudioFormat.ENCODING_PCM_FLOAT).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                .setBufferSizeInBytes(maxOf(minPlay, frameShift * 4 * 4))
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+                .build()
+        }
         val input = FloatArray(frameShift)
         try {
-            rec.startRecording()
-            track.play()
+            rec?.startRecording()
+            track?.play()
             models.denoiser.reset()
             gate.reset()
+            var fedFrames = 0L
+            val feedStart = SystemClock.uptimeMillis()
             while (running.get()) {
-                var read = 0
-                while (read < frameShift && running.get()) {
-                    val n = rec.read(input, read, frameShift - read, AudioRecord.READ_BLOCKING)
-                    if (n <= 0) break
-                    read += n
+                if (dbg != null) {
+                    val f = dbg(frameShift)
+                    System.arraycopy(f, 0, input, 0, minOf(f.size, frameShift))
+                    fedFrames++
+                    // Pace to real time so captions, lips and the gate line up.
+                    val due = feedStart + fedFrames * frameShift * 1000L / SAMPLE_RATE
+                    val wait = due - SystemClock.uptimeMillis()
+                    if (wait > 0) Thread.sleep(wait)
+                } else {
+                    var read = 0
+                    while (read < frameShift && running.get()) {
+                        val n = rec!!.read(input, read, frameShift - read, AudioRecord.READ_BLOCKING)
+                        if (n <= 0) break
+                        read += n
+                    }
+                    if (read < frameShift) continue
                 }
-                if (read < frameShift) continue
                 rawWriter?.write(input)
 
                 val denoised = try { models.denoiser.process(input.copyOf()) } catch (t: Throwable) { input.copyOf() }
@@ -124,7 +145,7 @@ class AudioPipeline(
                     e += clean[k] * clean[k]
                 }
                 cleanWriter?.write(gated)
-                if (monitorEnabled) track.write(out, 0, n, AudioTrack.WRITE_NON_BLOCKING)
+                if (monitorEnabled) track?.write(out, 0, n, AudioTrack.WRITE_NON_BLOCKING)
                 if (!asrQueue.offer(gated)) { asrQueue.poll(); asrQueue.offer(gated) }
                 if (voice) {
                     val v = Pair(clean, if (s.hasLock && s.othersSpeaking < 0.3f) s.lockedSpeaking else 0f)
@@ -135,10 +156,10 @@ class AudioPipeline(
         } catch (t: Throwable) {
             Log.e("VoiceBeamAudio", "audio loop failed", t)
         } finally {
-            try { rec.stop() } catch (_: Throwable) {}
-            rec.release()
-            try { track.stop() } catch (_: Throwable) {}
-            track.release()
+            try { rec?.stop() } catch (_: Throwable) {}
+            rec?.release()
+            try { track?.stop() } catch (_: Throwable) {}
+            track?.release()
         }
     }
 }
