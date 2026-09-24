@@ -66,11 +66,9 @@ class DebugFeedTest {
         compose.waitUntil(15_000) { engine.state.value.lockedId != null }
         android.util.Log.i("VoiceBeamTest", "locked id=" + engine.state.value.lockedId)
         // Let the UI catch up with the engine so the shot shows the lock ring and chip.
-        compose.waitForIdle()
-        compose.waitUntil(10_000) {
-            compose.onAllNodes(androidx.compose.ui.test.hasText("Locked", substring = true)).fetchSemanticsNodes().isNotEmpty()
-        }
-        Thread.sleep(800)
+        // (No compose idling/tree queries here: the live demo feed redraws off the
+        // main thread and Espresso idling trips Compose's thread check.)
+        Thread.sleep(2500)
         shot("2-locked")
 
         // The clip alternates talkers every 15 s; the locked person must light up.
