@@ -104,9 +104,9 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
     var showSheet by remember { mutableStateOf(false) }
     val demoFeed = BuildConfig.DEBUG && settings.debugFeed
     val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER; implementationMode = PreviewView.ImplementationMode.COMPATIBLE } }
-    val analyzer = remember { if (demoFeed) null else FaceAnalyzer(context.applicationContext) { t, faces, w, h -> engine.onFaces(t, faces, w, h) } }
+    val analyzer = remember(demoFeed) { if (demoFeed) null else FaceAnalyzer(context.applicationContext) { t, faces, w, h -> engine.onFaces(t, faces, w, h) } }
     val surfaceView = remember { SurfaceView(context) }
-    val demoPlayer = remember {
+    val demoPlayer = remember(demoFeed) {
         if (!demoFeed) null else ExoPlayer.Builder(context).build().also { pl ->
             pl.setVideoSurfaceView(surfaceView)
             pl.setMediaItem(MediaItem.fromUri("asset:///feed/test_feed.mp4"))
@@ -116,26 +116,32 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
             pl.play()
         }
     }
-    val demoFeeder = remember { if (!demoFeed) null else DebugVideoFeed(context.applicationContext, FaceSink { t, faces, w, h -> engine.onFaces(t, faces, w, h) }) }
+    val demoFeeder = remember(demoFeed) { if (!demoFeed) null else DebugVideoFeed(context.applicationContext, FaceSink { t, faces, w, h -> engine.onFaces(t, faces, w, h) }) }
     val executor = remember { Executors.newSingleThreadExecutor() }
 
     val providerHolder = remember { arrayOfNulls<ProcessCameraProvider>(1) }
     DisposableEffect(Unit) {
         engine.startListening()
         onDispose {
+            engine.stopListening()
+            executor.shutdown()
+        }
+    }
+    // Keyed on demoFeed: flipping the setting releases the previous path's resources.
+    DisposableEffect(demoFeed) {
+        onDispose {
             // Unbind first so CameraX stops handing frames to the analyzer before it closes.
             try { providerHolder[0]?.unbindAll() } catch (_: Throwable) {}
-            engine.stopListening()
             demoFeeder?.stop()
             demoPlayer?.release()
             executor.execute { analyzer?.close() }
-            executor.shutdown()
         }
     }
     LaunchedEffect(state.modelsReady) { if (state.modelsReady) engine.startListening() }
 
     LaunchedEffect(backCamera, settings.hd1080, demoFeed) {
         if (demoFeed) {
+            try { providerHolder[0]?.unbindAll() } catch (_: Throwable) {}
             engine.setMirrored(false)
             videoBound = false
             demoFeeder?.start()
