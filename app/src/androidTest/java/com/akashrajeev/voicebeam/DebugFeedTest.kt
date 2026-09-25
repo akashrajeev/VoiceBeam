@@ -118,6 +118,11 @@ class DebugFeedTest {
     }
 
     private fun shot(name: String) {
+        // The compose test clock only recomposes when the test syncs, so a raw
+        // screenshot can show a stale frame (e.g. status chip lagging the lock
+        // ring). Push a few frames through first.
+        try { compose.mainClock.advanceTimeBy(600) } catch (t: Throwable) { Log.w("VBSHT", "clock advance failed: ${t.message}") }
+        Thread.sleep(400)
         // takeScreenshot() intermittently returns null under load; retry a few times.
         var bmp: Bitmap? = null
         for (attempt in 1..4) {

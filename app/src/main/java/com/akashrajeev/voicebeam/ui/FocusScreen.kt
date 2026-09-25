@@ -280,15 +280,8 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                 Chip("Face tracking isn't available on this device. Captions and noise removal still work.",
                     Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 100.dp, start = 16.dp, end = 16.dp), color = Card2)
             }
-            // Save results are a short-lived notice, not a permanent banner.
-            val msg = state.recording.lastMessage
-            var msgVisible by remember { mutableStateOf(false) }
-            LaunchedEffect(msg) {
-                msgVisible = msg != null
-                if (msg != null && !state.recording.exporting) { delay(4000); msgVisible = false }
-            }
-            if (msg != null && (msgVisible || state.recording.exporting)) {
-                Chip(msg, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = if (demoFeed) 100.dp else 64.dp), color = Card2)
+            state.recording.lastMessage?.let {
+                Chip(it, Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = if (demoFeed) 100.dp else 64.dp), color = Card2)
             }
         }
         BottomNav(Screen.FOCUS, onNavigate)

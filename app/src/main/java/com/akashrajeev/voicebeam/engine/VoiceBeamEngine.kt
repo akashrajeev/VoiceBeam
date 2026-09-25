@@ -417,6 +417,9 @@ class VoiceBeamEngine(private val app: Context) {
             sessions.writeMeta(meta, segs)
             refreshSessions()
             _state.update { it.copy(recording = it.recording.copy(exporting = false, lastMessage = message)) }
+            // Save results are a short notice, not a permanent banner.
+            kotlinx.coroutines.delay(4000)
+            _state.update { st -> if (st.recording.lastMessage == message && !st.recording.exporting) st.copy(recording = st.recording.copy(lastMessage = null)) else st }
         }
     }
 
