@@ -5,6 +5,7 @@ Fixture audio is kept out of git; the manifest records source IDs and references
 """
 import json, subprocess, sys, pathlib
 root = pathlib.Path(sys.argv[1]); out = pathlib.Path(sys.argv[2]); out.mkdir(parents=True, exist_ok=True)
+(out / "LIBRISPEECH-LICENSE.txt").write_bytes((root / "LICENSE.TXT").read_bytes())
 ids = ['1089-134686-0002', '1089-134686-0013', '121-121726-0008', '121-121726-0012', '1221-135767-0005', '1221-135767-0024']
 refs = {}
 for transcript in root.glob('test-clean/*/*/*.trans.txt'):
