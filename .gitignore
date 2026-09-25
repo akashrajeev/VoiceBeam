@@ -10,3 +10,5 @@ captures/
 # large model files are fetched by scripts/fetch_models.sh
 app/src/main/assets/models/
 app/libs/*.aar
+
+scripts/__pycache__/
