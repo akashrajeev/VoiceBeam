@@ -3,6 +3,7 @@ package com.akashrajeev.voicebeam.engine
 import android.annotation.SuppressLint
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioDeviceInfo
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
@@ -28,6 +29,7 @@ import kotlin.math.sqrt
  */
 class AudioPipeline(
     private val models: AudioModels,
+    private val app: android.content.Context,
     private val signals: () -> GateInputs,   // latest vision + voice info (voiceActive is filled here)
     private val onFrame: (FrameInfo) -> Unit,
 ) {
@@ -36,7 +38,7 @@ class AudioPipeline(
     @Volatile var quietOthers = 0.8f
     @Volatile var boostDb = 12f
     @Volatile var denoiseMix = 1f          // 0 = raw, 1 = fully denoised
-    @Volatile var monitorEnabled = true    // play to earphones
+    @Volatile var monitorEnabled = true    // hard-limited to an actual headphone route
     @Volatile var rawWriter: WavWriter? = null
     @Volatile var cleanWriter: WavWriter? = null
     /** Debug builds only: when set, called with the frame size to produce mic input. */
@@ -96,6 +98,14 @@ class AudioPipeline(
                 .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
                 .build()
         }
+        // Prefer a physical earphone route; never open monitor audio to the speaker.
+        val headset = (app.getSystemService(android.content.Context.AUDIO_SERVICE) as android.media.AudioManager)
+            .getDevices(android.media.AudioManager.GET_DEVICES_OUTPUTS).firstOrNull {
+                it.type in setOf(AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                    AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                    AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET)
+            }
+        if (headset != null) track?.preferredDevice = headset
         val input = FloatArray(frameShift)
         try {
             rec?.startRecording()
@@ -146,8 +156,19 @@ class AudioPipeline(
                     e += clean[k] * clean[k]
                 }
                 cleanWriter?.write(gated)
-                if (monitorEnabled) track?.write(out, 0, n, AudioTrack.WRITE_NON_BLOCKING)
-                if (!asrQueue.offer(gated)) { asrQueue.poll(); asrQueue.offer(gated) }
+                // Speaker playback of a boosted live microphone causes a runaway feedback loop.
+                // The actual routed output, not merely a paired headset, must be safe.
+                val routed = track?.routedDevice
+                val headphoneRoute = routed != null && routed.type in setOf(
+                    AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET,
+                    AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE,
+                    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+                    AudioDeviceInfo.TYPE_BLE_HEADSET,
+                )
+                if (monitorEnabled && headphoneRoute) track?.write(out, 0, n, AudioTrack.WRITE_NON_BLOCKING)
+                // Recognition needs speech, not the gate's sometimes 80%-attenuated output.
+                // Assign a caption to the target separately using the gate probability.
+                if (!asrQueue.offer(clean.copyOf())) { asrQueue.poll(); asrQueue.offer(clean.copyOf()) }
                 if (voice) {
                     val v = Pair(clean, if (s.hasLock && s.othersSpeaking < 0.3f) s.lockedSpeaking else 0f)
                     if (!voiceQueue.offer(v)) { voiceQueue.poll(); voiceQueue.offer(v) }

@@ -62,6 +62,7 @@ class VoiceBeamEngine(private val app: Context) {
     @Volatile private var models: AudioModels? = null
     private val tracker = FaceTracker()
     private var pipeline: AudioPipeline? = null
+    @Volatile private var audioOnly = false
     private var learner: VoiceLearner? = null
     private val assembler = CaptionAssembler(SAMPLE_RATE)
     private val workers = AtomicBoolean(false)
@@ -71,6 +72,7 @@ class VoiceBeamEngine(private val app: Context) {
 
     @Volatile private var latestProbability = 1f
     @Volatile private var latestVoiceMatch: Float? = null
+    @Volatile private var lastVoiceMatchAtMs = 0L
     @Volatile private var visionClockMs = 0L
 
     /** Built fresh each time the camera is bound, so quality changes apply. */
@@ -139,13 +141,13 @@ class VoiceBeamEngine(private val app: Context) {
     fun lockAt(nx: Float, ny: Float): Boolean {
         val prev = tracker.lockedId
         val id = tracker.lockAt(nx, ny, SystemClock.uptimeMillis())
-        if (id != prev) { learner?.reset(); latestVoiceMatch = null }
+        if (id != prev) { learner?.reset(); latestVoiceMatch = null; lastVoiceMatchAtMs = 0L }
         _state.update { it.copy(lockedId = id, voiceLearned = false, voiceMatch = null) }
         return id != null
     }
 
     fun unlock() {
-        tracker.unlock(); learner?.reset(); latestVoiceMatch = null
+        audioOnly = false; tracker.unlock(); learner?.reset(); latestVoiceMatch = null; lastVoiceMatchAtMs = 0L
         _state.update { it.copy(lockedId = null, voiceLearned = false, voiceMatch = null) }
     }
 
@@ -156,12 +158,13 @@ class VoiceBeamEngine(private val app: Context) {
         val lockedFace = faces.firstOrNull { it.id == locked }
         val others = faces.filter { it.id != locked }.maxOfOrNull { it.speaking } ?: 0f
         return GateInputs(
-            hasLock = lockedFace != null,
-            lockedSpeaking = lockedFace?.speaking ?: 0f,
-            othersSpeaking = others,
-            voiceMatch = latestVoiceMatch,
+            audioOnly = audioOnly,
+            hasLock = if (audioOnly) locked != null && learner?.learned == true else lockedFace != null,
+            lockedSpeaking = if (audioOnly) 0f else lockedFace?.speaking ?: 0f,
+            othersSpeaking = if (audioOnly) 0f else others,
+            voiceMatch = latestVoiceMatch.takeIf { !audioOnly || now - lastVoiceMatchAtMs < 2800L },
             voiceActive = false,
-            lockedVisible = lockedFace == null || now - lockedFace.lastSeenMs < 400,
+            lockedVisible = !audioOnly && (lockedFace == null || now - lockedFace.lastSeenMs < 400),
         )
     }
 
@@ -181,7 +184,7 @@ class VoiceBeamEngine(private val app: Context) {
             stopListening()
         }
         if (BuildConfig.DEBUG) Log.i("VoiceBeamEngine", "startListening source=" + (if (wantDebug) "debug wav" else "mic"))
-        val p = AudioPipeline(m, ::gateInputs) { f ->
+        val p = AudioPipeline(m, app, ::gateInputs) { f ->
             latestProbability = f.probability
             _state.update { it.copy(inputLevel = f.level, gain = f.gain, targetProbability = f.probability) }
         }
@@ -200,6 +203,8 @@ class VoiceBeamEngine(private val app: Context) {
     fun stopListening() {
         if (_state.value.recording.active) stopRecording()
         workers.set(false)
+        audioOnly = false
+        _state.update { it.copy(audioOnly = false) }
         pipeline?.stop(); pipeline = null
         captionThread?.join(1500); voiceThread?.join(1500)
         captionThread = null; voiceThread = null
@@ -246,7 +251,7 @@ class VoiceBeamEngine(private val app: Context) {
                 if (tracker.lockedId == null) continue
                 val wasLearned = l.learned
                 val score = try { l.feed(samples, lip) } catch (t: Throwable) { null }
-                if (score != null) latestVoiceMatch = score
+                if (score != null) { latestVoiceMatch = score; lastVoiceMatchAtMs = SystemClock.uptimeMillis() }
                 if (BuildConfig.DEBUG && (!wasLearned && l.learned || score != null)) Log.i("VoiceBeamEngine", "voice: learned=" + l.learned + " progress=" + l.progress + " score=" + score + " lip=" + lip)
                 if (l.learned != _state.value.voiceLearned || score != null) {
                     _state.update { it.copy(voiceLearned = l.learned, voiceMatch = latestVoiceMatch) }
@@ -279,6 +284,21 @@ class VoiceBeamEngine(private val app: Context) {
         if (s.useSceneMic != old.useSceneMic && pipeline != null) { stopListening(); startListening() }
         // Demo feed toggles swap the audio source too (recorded wav vs mic).
         if (BuildConfig.DEBUG && s.debugFeed != old.debugFeed && pipeline != null) { stopListening(); startListening() }
+    }
+
+    /** The camera may be released only after the tapped person's voice is learned. */
+    fun enterAudioOnly(): Boolean {
+        if (tracker.lockedId == null || learner?.learned != true || pipeline == null) return false
+        audioOnly = true
+        _state.update { it.copy(audioOnly = true) }
+        return true
+    }
+
+    fun exitAudioOnly() {
+        audioOnly = false
+        // Camera retargeting needs a fresh tap; do not silently attach to a new face.
+        tracker.reset(); learner?.reset(); latestVoiceMatch = null; lastVoiceMatchAtMs = 0L
+        _state.update { it.copy(audioOnly = false, lockedId = null, voiceLearned = false, voiceMatch = null) }
     }
 
     fun setMonitor(on: Boolean) { pipeline?.monitorEnabled = on }

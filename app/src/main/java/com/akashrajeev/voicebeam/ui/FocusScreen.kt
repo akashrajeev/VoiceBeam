@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -140,7 +141,14 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
     }
     LaunchedEffect(state.modelsReady) { if (state.modelsReady) engine.startListening() }
 
-    LaunchedEffect(backCamera, settings.hd1080, demoFeed) {
+    LaunchedEffect(backCamera, settings.hd1080, demoFeed, state.audioOnly) {
+        if (state.audioOnly) {
+            try { providerHolder[0]?.unbindAll() } catch (_: Throwable) {}
+            engine.clearVideoCapture()
+            videoBound = false
+            demoFeeder?.stop()
+            return@LaunchedEffect
+        }
         if (demoFeed) {
             try { providerHolder[0]?.unbindAll() } catch (_: Throwable) {}
             engine.setMirrored(false)
@@ -187,11 +195,11 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
         Box(Modifier.weight(1f).fillMaxWidth()) {
             // key() forces AndroidView to recreate when the feed flips; its factory
             // lambda only runs once, so without it the camera preview stays attached.
-            key(demoFeed) {
+            if (!state.audioOnly) key(demoFeed) {
                 AndroidView({ if (demoFeed) demoImage ?: previewView else previewView }, Modifier.fillMaxSize())
             }
-            // Face rings + tap to lock.
-            Canvas(
+            // Face rings + tap to lock. No camera frames are needed after enrollment.
+            if (!state.audioOnly) Canvas(
                 Modifier.fillMaxSize().testTag("faces").pointerInput(state.imageWidth, state.imageHeight, state.mirrored) {
                     detectTapGestures { pos ->
                         if (state.imageWidth > 0) {
@@ -256,6 +264,14 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                     modifier = Modifier.testTag("caption"),
                 )
                 Spacer(Modifier.height(12.dp))
+                if (state.audioOnly) {
+                    Text("Audio-only listen mode - camera off. Keep earphones connected; the phone microphone still needs to hear the person.", color = Accent, fontSize = 14.sp)
+                    Button(onClick = { engine.exitAudioOnly() }) { Text("Back to camera") }
+                } else if (state.lockedId != null) {
+                    Button(onClick = { engine.enterAudioOnly() }, enabled = state.voiceLearned && state.earphones != null && !state.recording.active) {
+                        Text(if (state.voiceLearned) "Listen without camera" else "Learning voice...")
+                    }
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Quiet others", color = Muted, fontSize = 13.sp)
                     Slider(settings.quietOthers, { v -> engine.updateSettings { it.copy(quietOthers = v) } }, Modifier.weight(1f).padding(horizontal = 10.dp))

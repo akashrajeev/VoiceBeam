@@ -138,6 +138,13 @@ class CoreTest {
         assertTrue(p >= 0.5f)
     }
 
+    @Test fun audioOnlyNeverUsesStaleLipOrUnverifiedVoice() {
+        val gate = TargetGate()
+        assertEquals(0f, gate.targetProbability(GateInputs(true, 0.99f, 0f, null, true, audioOnly = true)), 0.001f)
+        assertEquals(0.1f, gate.targetProbability(GateInputs(true, 0.99f, 0.99f, 0.1f, true, audioOnly = true)), 0.001f)
+        assertEquals(0.91f, gate.targetProbability(GateInputs(true, 0f, 0f, 0.91f, true, audioOnly = true)), 0.001f)
+    }
+
     @Test fun voiceMatchScores() {
         val a = floatArrayOf(1f, 0f, 0f); val b = floatArrayOf(0.9f, 0.1f, 0f); val c = floatArrayOf(0f, 1f, 0f)
         assertTrue(VoiceMatch.score(VoiceMatch.cosine(a, b)) > 0.9f)

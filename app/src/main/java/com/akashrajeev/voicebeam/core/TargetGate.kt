@@ -12,6 +12,7 @@ data class GateInputs(
     val voiceMatch: Float?,      // 0..1 from the voice fingerprint, null when not learned yet
     val voiceActive: Boolean,    // is there speech energy in this frame
     val lockedVisible: Boolean = true, // is the locked face in view right now
+    val audioOnly: Boolean = false, // use speaker embedding only; no camera fallback
 )
 
 /**
@@ -37,7 +38,10 @@ class TargetGate(
         if (!i.hasLock) return 1f
         val lips = i.lockedSpeaking
         val voice = i.voiceMatch
-        var p = if (voice == null) {
+        var p = if (i.audioOnly) {
+            // No stale visual cue or neutral 0.6 fallback in audio-only mode.
+            voice ?: 0f
+        } else if (voice == null) {
             // Face turned away or covered: no lip evidence, so stay neutral instead of muting them.
             if (!i.lockedVisible) 0.6f else lips
         } else {
