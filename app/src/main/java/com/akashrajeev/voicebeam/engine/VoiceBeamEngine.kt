@@ -288,10 +288,9 @@ class VoiceBeamEngine(private val app: Context) {
 
     /** The camera may be released only after the tapped person's voice is learned. */
     fun enterAudioOnly(): Boolean {
-        if (tracker.lockedId == null || learner?.learned != true || pipeline == null) return false
-        audioOnly = true
-        _state.update { it.copy(audioOnly = true) }
-        return true
+        // Held-out different speakers scored the same as the target with the
+        // current CAM++ calibration. Do not allow unsafe camera-free isolation.
+        return false
     }
 
     fun exitAudioOnly() {

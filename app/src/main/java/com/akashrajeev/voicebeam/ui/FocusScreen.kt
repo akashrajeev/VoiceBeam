@@ -268,9 +268,7 @@ fun FocusScreen(engine: VoiceBeamEngine, captionMode: Boolean, onNavigate: (Scre
                     Text("Audio-only listen mode - camera off. Keep earphones connected; the phone microphone still needs to hear the person.", color = Accent, fontSize = 14.sp)
                     Button(onClick = { engine.exitAudioOnly() }) { Text("Back to camera") }
                 } else if (state.lockedId != null) {
-                    Button(onClick = { engine.enterAudioOnly() }, enabled = state.voiceLearned && state.earphones != null && !state.recording.active) {
-                        Text(if (state.voiceLearned) "Listen without camera" else "Learning voice...")
-                    }
+                    Text("Camera-free listening is not yet reliable across speakers. Keep the camera on for now.", color = Muted, fontSize = 12.sp)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Quiet others", color = Muted, fontSize = 13.sp)
