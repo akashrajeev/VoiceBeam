@@ -1,0 +1,50 @@
+name: Release APK
+
+# Pushing a tag named apk-* publishes the APKs from the ci-results branch as a
+# pre-release. The ci-results STATUS must match the tagged build commit
+# (the tag's first parent) and must be all green.
+on:
+  push:
+    tags: [ 'apk-*' ]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Collect APKs from ci-results
+        run: |
+          set -e
+          BUILD_SHA=$(git rev-parse HEAD^)
+          git fetch -q origin ci-results
+          git show origin/ci-results:STATUS.txt | tee status.txt
+          grep -q "commit=$BUILD_SHA" status.txt
+          grep -q "build=success" status.txt
+          grep -q "device_tests=success" status.txt
+          mkdir -p dist
+          for t in release debug; do
+            for p in $(git ls-tree --name-only origin/ci-results build-out/apk/ | grep "app-$t.apk.part-" | sort); do git show origin/ci-results:$p; done > dist/app-$t.apk
+          done
+          SHORT=$(echo $BUILD_SHA | cut -c1-7)
+          mv dist/app-release.apk dist/VoiceBeam-0.1.0-$SHORT.apk
+          mv dist/app-debug.apk dist/VoiceBeam-0.1.0-$SHORT-debug-demofeed.apk
+          ls -l dist
+          echo "SHORT=$SHORT" >> $GITHUB_ENV
+      - name: Publish pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<EOT
+          VoiceBeam 0.1.0 dev build from commit ${SHORT} (CI green: 10/10 on-device tests).
+
+          - VoiceBeam-0.1.0-${SHORT}.apk: install this one on your phone (real camera, MediaPipe on-device).
+          - VoiceBeam-0.1.0-${SHORT}-debug-demofeed.apk: debug build with the recorded two-speaker demo feed (Settings).
+
+          Signed with the dev key; Android will ask to allow installs from this source.
+          EOT
+          gh release create "$GITHUB_REF_NAME" dist/*.apk --repo "$GITHUB_REPOSITORY" --prerelease --title "VoiceBeam 0.1.0 dev (${SHORT})" --notes-file notes.md
