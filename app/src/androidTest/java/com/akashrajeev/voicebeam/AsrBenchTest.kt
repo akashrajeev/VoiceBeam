@@ -3,6 +3,7 @@ package com.akashrajeev.voicebeam
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.akashrajeev.voicebeam.core.WavWriter
+import com.akashrajeev.voicebeam.core.VoiceMatch
 import com.akashrajeev.voicebeam.ml.AudioModels
 import org.json.JSONArray
 import org.junit.Assert.assertEquals
@@ -47,6 +48,32 @@ class AsrBenchTest {
             android.util.Log.i("VoiceBeamWER", "case=${f.getString("id")} scenario=$scenario errors=$e words=${tokens(ref).size} hyp=$hyp")
         }
         for ((scenario, t) in totals) android.util.Log.i("VoiceBeamWER", "SCENARIO $scenario errors=${t[0]} words=${t[1]} WER=${String.format(Locale.US,"%.3f",t[0].toDouble()/t[1])}")
+    }
+
+    @Test fun voiceprintAcrossHeldOutSpeakers() {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val src = InstrumentationRegistry.getInstrumentation().context.assets
+        val models = AudioModels.load(ctx.assets)
+        fun embed(id: String): FloatArray {
+            val file = File(ctx.cacheDir, "voiceprint-bench.wav")
+            src.open("asr_bench/$id.wav").use { input -> file.outputStream().use { input.copyTo(it) } }
+            val (pcm, rate) = WavWriter.read(file)
+            assertEquals(16000, rate)
+            return models.voicePrint.embed(pcm.copyOfRange(0, minOf(pcm.size, 16000 * 3)))
+                ?: error("No voice embedding for $id")
+        }
+        val enrollment = embed("1089-134686-0013")
+        for ((id, relation) in listOf(
+            "1089-134686-0002" to "same-speaker",
+            "121-121726-0008" to "different-speaker",
+            "1221-135767-0005" to "different-speaker",
+            "1089-134686-0002-other-speaker" to "overlap-25pct",
+            "1089-134686-0002-strong-overlap" to "overlap-55pct",
+        )) {
+            val cosine = VoiceMatch.cosine(enrollment, embed(id))
+            val gateScore = VoiceMatch.score(cosine)
+            android.util.Log.i("VoiceBeamWER", "VOICEPRINT $relation case=$id cosine=$cosine gateScore=$gateScore")
+        }
     }
 
     private fun tokens(s: String) = Regex("[A-Z0-9]+").findAll(s.uppercase(Locale.US)).map { it.value }.toList()
