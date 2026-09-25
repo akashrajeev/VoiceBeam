@@ -6,6 +6,6 @@ adb logcat -c || true
 ./gradlew --no-daemon connectedDebugAndroidTest > ci/device.log 2>&1
 code=$?
 echo $code > ci/device.exit
-adb logcat -d -s VBSHT VoiceBeamTest VoiceBeamEngine VoiceBeamModels VoiceBeamAudio VoiceBeamUI VoiceBeamVision AndroidRuntime TestRunner > ci/logcat.txt 2>&1 || true
+adb logcat -d -s VBSHT VoiceBeamTest VoiceBeamEngine VoiceBeamModels VoiceBeamAudio VoiceBeamUI VoiceBeamVision VoiceBeamWER AndroidRuntime TestRunner > ci/logcat.txt 2>&1 || true
 python3 scripts/extract_shots.py ci/logcat.txt ci/shots >> ci/device.log 2>&1 || true
 exit $code
