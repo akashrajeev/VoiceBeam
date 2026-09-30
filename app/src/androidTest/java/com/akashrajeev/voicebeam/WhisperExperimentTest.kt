@@ -6,6 +6,7 @@ import android.util.Log
 import android.graphics.Bitmap
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -37,6 +38,7 @@ class WhisperExperimentTest {
         val engine = (compose.activity.application as VoiceBeamApp).engine
         compose.runOnUiThread { engine.updateSettings { it.copy(onboarded = true) } }
         compose.waitUntil(180_000) { engine.state.value.modelsReady }
+        compose.onNodeWithTag("start").performScrollTo().performClick()
         compose.onNodeWithText("Settings").performClick()
         compose.onNodeWithText("Offline ASR test - CPU only (2 threads)").assertExists()
         compose.onNodeWithText("Base.en (60 MB)").performScrollTo().performClick()
