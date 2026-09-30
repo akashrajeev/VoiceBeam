@@ -34,6 +34,8 @@ android {
 
     buildTypes {
         debug {
+            applicationIdSuffix = ".asrexperiment"
+            versionNameSuffix = "-offline-asr-test"
             signingConfig = signingConfigs.getByName("shared")
             // Debug also carries x86_64 so the emulator tests can run it.
             ndk { abiFilters += listOf("x86_64") }

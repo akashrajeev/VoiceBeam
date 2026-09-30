@@ -3,9 +3,9 @@
 mkdir -p ci
 adb devices > ci/adb.txt 2>&1
 adb logcat -c || true
-./gradlew --no-daemon connectedDebugAndroidTest > ci/device.log 2>&1
+./gradlew --no-daemon connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.akashrajeev.voicebeam.WhisperExperimentTest > ci/device.log 2>&1
 code=$?
 echo $code > ci/device.exit
-adb logcat -d -s VBSHT VoiceBeamTest VoiceBeamEngine VoiceBeamModels VoiceBeamAudio VoiceBeamUI VoiceBeamVision VoiceBeamWER AndroidRuntime TestRunner > ci/logcat.txt 2>&1 || true
+adb logcat -d -s VBSHT VoiceBeamTest VoiceBeamEngine VoiceBeamModels VoiceBeamAudio VoiceBeamUI VoiceBeamVision VoiceBeamWER VoiceBeamAsr AndroidRuntime TestRunner > ci/logcat.txt 2>&1 || true
 python3 scripts/extract_shots.py ci/logcat.txt ci/shots >> ci/device.log 2>&1 || true
 exit $code

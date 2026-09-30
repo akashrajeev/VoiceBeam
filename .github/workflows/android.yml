@@ -34,7 +34,7 @@ jobs:
       - name: Fetch on-device models
         run: mkdir -p ci && bash scripts/fetch_models.sh 2>&1 | tail -40 > ci/fetch.log
       - name: Fetch offline Whisper experiment
-        run: bash scripts/fetch_whisper.sh
+        run: VB_WHISPER_MODEL=both bash scripts/fetch_whisper.sh
       - name: Unit tests
         run: set -o pipefail; ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee ci/unit.log
       - name: Build APKs
@@ -79,7 +79,7 @@ jobs:
       - name: Fetch on-device models
         run: mkdir -p ci && bash scripts/fetch_models.sh > ci/fetch-device.log 2>&1
       - name: Fetch offline Whisper experiment
-        run: bash scripts/fetch_whisper.sh
+        run: VB_WHISPER_MODEL=both bash scripts/fetch_whisper.sh
       - name: Instrumented tests on emulator
         id: emu1
         continue-on-error: true

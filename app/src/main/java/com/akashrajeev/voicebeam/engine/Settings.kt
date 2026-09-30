@@ -1,6 +1,7 @@
 package com.akashrajeev.voicebeam.engine
 
 import android.content.Context
+import com.akashrajeev.voicebeam.BuildConfig
 import com.akashrajeev.voicebeam.ml.AsrBackend
 
 data class Settings(
@@ -16,7 +17,7 @@ data class Settings(
     val captionSize: Int = 1,           // 0 small, 1 medium, 2 large
     val onboarded: Boolean = false,
     val hd1080: Boolean = false,
-    val asrBackend: AsrBackend = AsrBackend.ZIPFORMER,
+    val asrBackend: AsrBackend = if (BuildConfig.DEBUG) AsrBackend.WHISPER_SMALL else AsrBackend.ZIPFORMER,
     val debugFeed: Boolean = false,
 )
 
@@ -36,7 +37,7 @@ class SettingsStore(context: Context) {
         captionSize = p.getInt("capSize", 1),
         onboarded = p.getBoolean("onboarded", false),
         hd1080 = p.getBoolean("hd1080", false),
-        asrBackend = runCatching { AsrBackend.valueOf(p.getString("asrBackend", null)!!) }.getOrDefault(AsrBackend.ZIPFORMER),
+        asrBackend = runCatching { AsrBackend.valueOf(p.getString("asrBackend", null)!!) }.getOrDefault(if (BuildConfig.DEBUG) AsrBackend.WHISPER_SMALL else AsrBackend.ZIPFORMER),
         debugFeed = p.getBoolean("dbgFeed", false),
     )
 

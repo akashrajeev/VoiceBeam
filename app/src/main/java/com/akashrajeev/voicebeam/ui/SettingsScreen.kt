@@ -45,11 +45,11 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SectionHeader("Captions")
             ValueRow("Language", "English")
             if (BuildConfig.DEBUG) {
-                Text("Offline ASR experiment: restart app after changing", color = Muted, fontSize = 12.sp)
+                Text("Offline ASR test - CPU only (2 threads)", color = Muted, fontSize = 12.sp)
                 Segmented(listOf("Zipformer", "Small", "Turbo"), s.asrBackend.ordinal) { i ->
                     engine.updateSettings { it.copy(asrBackend = AsrBackend.values()[i]) }
                 }
-                Text("Only packaged weights load. Whisper may lag; no uploads or downloads.", color = Muted, fontSize = 12.sp)
+                Text("Small is the test default. Turbo is heavier and unmeasured on your phone. Both work offline. Force stop and reopen after switching.", color = Muted, fontSize = 12.sp)
             }
             SwitchRow("Show what others say", "Shown in grey, marked Others", s.showOthersCaptions) { v -> engine.updateSettings { it.copy(showOthersCaptions = v) } }
             Text("Caption size", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
