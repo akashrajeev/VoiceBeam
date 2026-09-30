@@ -110,7 +110,7 @@ class VoiceBeamEngine(private val app: Context) {
         if (models != null || _state.value.modelError != null) return
         scope.launch(Dispatchers.IO) {
             try {
-                val m = AudioModels.load(app.assets)
+                val m = AudioModels.load(app, _settings.value.asrBackend)
                 models = m
                 learner = VoiceLearner({ m.voicePrint.embed(it) }, SAMPLE_RATE)
                 _state.update { it.copy(modelsReady = true) }

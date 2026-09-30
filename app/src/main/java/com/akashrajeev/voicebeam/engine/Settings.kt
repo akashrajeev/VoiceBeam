@@ -1,6 +1,7 @@
 package com.akashrajeev.voicebeam.engine
 
 import android.content.Context
+import com.akashrajeev.voicebeam.ml.AsrBackend
 
 data class Settings(
     val quietOthers: Float = 0.8f,      // 0..1, how much to turn down everyone else
@@ -15,6 +16,7 @@ data class Settings(
     val captionSize: Int = 1,           // 0 small, 1 medium, 2 large
     val onboarded: Boolean = false,
     val hd1080: Boolean = false,
+    val asrBackend: AsrBackend = AsrBackend.ZIPFORMER,
     val debugFeed: Boolean = false,
 )
 
@@ -34,6 +36,7 @@ class SettingsStore(context: Context) {
         captionSize = p.getInt("capSize", 1),
         onboarded = p.getBoolean("onboarded", false),
         hd1080 = p.getBoolean("hd1080", false),
+        asrBackend = runCatching { AsrBackend.valueOf(p.getString("asrBackend", null)!!) }.getOrDefault(AsrBackend.ZIPFORMER),
         debugFeed = p.getBoolean("dbgFeed", false),
     )
 
@@ -43,6 +46,7 @@ class SettingsStore(context: Context) {
             .putBoolean("sceneMic", s.useSceneMic).putString("saveMode", s.saveMode.name).putString("burn", s.captionBurn.name)
             .putBoolean("others", s.showOthersCaptions).putBoolean("raw", s.keepRawAudio).putBoolean("stage", s.stageEnabled)
             .putInt("capSize", s.captionSize).putBoolean("onboarded", s.onboarded).putBoolean("hd1080", s.hd1080).putBoolean("dbgFeed", s.debugFeed)
+            .putString("asrBackend", s.asrBackend.name)
             .apply()
     }
 }

@@ -15,10 +15,13 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        externalNativeBuild { cmake { cppFlags += "-std=c++17" } }
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
     }
+
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" } }
 
     signingConfigs {
         create("shared") {
@@ -47,7 +50,7 @@ android {
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true; buildConfig = true }
-    androidResources { noCompress += listOf("onnx", "task", "txt") }
+    androidResources { noCompress += listOf("onnx", "task", "txt", "bin") }
     packaging {
         jniLibs { useLegacyPackaging = true }
         resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }

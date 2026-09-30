@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.akashrajeev.voicebeam.ml.AsrBackend
 import com.akashrajeev.voicebeam.BuildConfig
 import com.akashrajeev.voicebeam.Screen
 import com.akashrajeev.voicebeam.engine.CaptionBurn
@@ -43,6 +44,13 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             SwitchRow("Point mic at the scene", "Uses the camcorder mic setup, best with the back camera", s.useSceneMic) { v -> engine.updateSettings { it.copy(useSceneMic = v) } }
             SectionHeader("Captions")
             ValueRow("Language", "English")
+            if (BuildConfig.DEBUG) {
+                Text("Offline ASR experiment: restart app after changing", color = Muted, fontSize = 12.sp)
+                Segmented(listOf("Zipformer", "Small", "Turbo"), s.asrBackend.ordinal) { i ->
+                    engine.updateSettings { it.copy(asrBackend = AsrBackend.values()[i]) }
+                }
+                Text("Only packaged weights load. Whisper may lag; no uploads or downloads.", color = Muted, fontSize = 12.sp)
+            }
             SwitchRow("Show what others say", "Shown in grey, marked Others", s.showOthersCaptions) { v -> engine.updateSettings { it.copy(showOthersCaptions = v) } }
             Text("Caption size", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))
             Segmented(listOf("Small", "Medium", "Large"), s.captionSize) { i -> engine.updateSettings { it.copy(captionSize = i) } }

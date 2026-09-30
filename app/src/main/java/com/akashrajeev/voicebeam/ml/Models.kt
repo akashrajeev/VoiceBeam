@@ -22,7 +22,7 @@ const val SAMPLE_RATE = 16000
 private const val TAG = "VoiceBeamModels"
 
 /** Streaming speech-to-text (sherpa-onnx zipformer transducer, runs fully on device). */
-class Asr(assets: AssetManager) {
+class Asr(assets: AssetManager) : CaptionRecognizer {
     private val recognizer: OnlineRecognizer
     private var stream: OnlineStream
 
@@ -52,7 +52,7 @@ class Asr(assets: AssetManager) {
     }
 
     /** Feed audio; returns the current partial text and whether an utterance just ended. */
-    fun accept(samples: FloatArray): Pair<String, Boolean> {
+    override fun accept(samples: FloatArray): Pair<String, Boolean> {
         stream.acceptWaveform(samples, SAMPLE_RATE)
         while (recognizer.isReady(stream)) recognizer.decode(stream)
         val text = Captions.tidy(recognizer.getResult(stream).text)
@@ -61,9 +61,9 @@ class Asr(assets: AssetManager) {
         return Pair(text, ended)
     }
 
-    fun resetStream() { recognizer.reset(stream) }
+    override fun resetStream() { recognizer.reset(stream) }
 
-    fun release() { stream.release(); recognizer.release() }
+    override fun release() { stream.release(); recognizer.release() }
 }
 
 /** Real-time noise removal (GTCRN). */
@@ -110,8 +110,11 @@ class VoicePrint(assets: AssetManager) {
 }
 
 /** Loads all audio models once; safe to call from a background thread. */
-class AudioModels private constructor(val asr: Asr, val denoiser: Denoiser, val voicePrint: VoicePrint) {
+class AudioModels private constructor(val asr: CaptionRecognizer, val denoiser: Denoiser, val voicePrint: VoicePrint) {
     companion object {
+        fun load(context: android.content.Context, backend: AsrBackend): AudioModels =
+            AudioModels(if (backend == AsrBackend.ZIPFORMER) Asr(context.assets) else WhisperCaptionRecognizer(context, backend), Denoiser(context.assets), VoicePrint(context.assets))
+
         fun load(assets: AssetManager): AudioModels {
             val t0 = System.currentTimeMillis()
             val m = AudioModels(Asr(assets), Denoiser(assets), VoicePrint(assets))
