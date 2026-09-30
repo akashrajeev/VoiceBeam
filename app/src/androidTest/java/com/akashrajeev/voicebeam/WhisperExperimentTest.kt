@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
@@ -29,17 +30,17 @@ class WhisperExperimentTest {
 
     @Test fun packagedModelsAndSelection() {
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals(AsrBackend.WHISPER_SMALL, SettingsStore(ctx).load().asrBackend)
-        for (name in listOf("ggml-small-q5_1.bin", "ggml-large-v3-turbo-q5_0.bin")) {
-            ctx.assets.open("models/whisper/$name").use { assertTrue(it.available() > 100_000_000) }
+        assertEquals(AsrBackend.WHISPER_TINY, SettingsStore(ctx).load().asrBackend)
+        for (name in listOf("ggml-tiny.en-q5_1.bin", "ggml-base.en-q5_1.bin")) {
+            ctx.assets.open("models/whisper/$name").use { assertTrue(it.available() > 30_000_000) }
         }
         val engine = (compose.activity.application as VoiceBeamApp).engine
         compose.runOnUiThread { engine.updateSettings { it.copy(onboarded = true) } }
         compose.waitUntil(180_000) { engine.state.value.modelsReady }
         compose.onNodeWithText("Settings").performClick()
         compose.onNodeWithText("Offline ASR test - CPU only (2 threads)").assertExists()
-        compose.onNodeWithText("Turbo").performClick()
-        assertEquals(AsrBackend.WHISPER_TURBO, engine.settings.value.asrBackend)
+        compose.onNodeWithText("Base.en (60 MB)").performScrollTo().performClick()
+        assertEquals(AsrBackend.WHISPER_BASE, engine.settings.value.asrBackend)
         compose.mainClock.advanceTimeBy(1000)
         val shot = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         assertNotNull(shot)
@@ -49,13 +50,6 @@ class WhisperExperimentTest {
         Log.i("VBSHT", "BEGIN whisper-settings")
         encoded.chunked(3000).forEach { Log.i("VBSHT", "D " + it) }
         Log.i("VBSHT", "END whisper-settings")
-        // Force a Turbo native load and silence decode as a JNI/model smoke test.
-        // This is x86 emulator behavior, never a phone speed result.
-        val turbo = WhisperCaptionRecognizer(ctx, AsrBackend.WHISPER_TURBO)
-        try {
-            turbo.accept(FloatArray(16000) { 0.005f })
-            turbo.accept(FloatArray(16000))
-        } finally { turbo.release() }
-        compose.runOnUiThread { engine.updateSettings { it.copy(asrBackend = AsrBackend.WHISPER_SMALL) } }
+        compose.runOnUiThread { engine.updateSettings { it.copy(asrBackend = AsrBackend.WHISPER_TINY) } }
     }
 }

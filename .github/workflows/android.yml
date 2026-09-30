@@ -34,17 +34,18 @@ jobs:
       - name: Fetch on-device models
         run: mkdir -p ci && bash scripts/fetch_models.sh 2>&1 | tail -40 > ci/fetch.log
       - name: Fetch offline Whisper experiment
-        run: VB_WHISPER_MODEL=both bash scripts/fetch_whisper.sh
+        run: VB_WHISPER_MODEL=small-q5_1 bash scripts/fetch_whisper.sh
       - name: Unit tests
         run: set -o pipefail; ./gradlew --no-daemon testDebugUnitTest 2>&1 | tee ci/unit.log
       - name: Build APKs
-        run: set -o pipefail; ./gradlew --no-daemon assembleDebug assembleRelease 2>&1 | tee ci/build.log
+        run: set -o pipefail; ./gradlew --no-daemon assembleDebug 2>&1 | tee ci/build.log
       - name: Collect
         if: always()
         run: |
           mkdir -p ci/apk ci/unit-results
-          cp app/build/outputs/apk/release/*.apk ci/apk/ 2>/dev/null || true
           cp app/build/outputs/apk/debug/*.apk ci/apk/ 2>/dev/null || true
+          stat -c "%n %s bytes" ci/apk/*.apk > ci/apk-size.txt
+          unzip -l ci/apk/*.apk > ci/apk-contents.txt
           cp app/build/test-results/testDebugUnitTest/*.xml ci/unit-results/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
@@ -79,7 +80,7 @@ jobs:
       - name: Fetch on-device models
         run: mkdir -p ci && bash scripts/fetch_models.sh > ci/fetch-device.log 2>&1
       - name: Fetch offline Whisper experiment
-        run: VB_WHISPER_MODEL=both bash scripts/fetch_whisper.sh
+        run: VB_WHISPER_MODEL=small-q5_1 bash scripts/fetch_whisper.sh
       - name: Instrumented tests on emulator
         id: emu1
         continue-on-error: true
@@ -93,7 +94,7 @@ jobs:
           force-avd-creation: true
           disable-animations: true
           emulator-boot-timeout: 900
-          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
+          emulator-options: -partition-size 8192 -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
           script: bash scripts/ci_device_tests.sh
       - name: Instrumented tests on emulator (retry if the emulator failed to start)
         if: steps.emu1.outcome == 'failure' && hashFiles('ci/device.exit') == ''
@@ -107,7 +108,7 @@ jobs:
           force-avd-creation: true
           disable-animations: true
           emulator-boot-timeout: 900
-          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
+          emulator-options: -partition-size 8192 -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
           script: bash scripts/ci_device_tests.sh
       - name: Collect
         if: always()

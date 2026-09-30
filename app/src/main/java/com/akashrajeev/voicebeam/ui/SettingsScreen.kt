@@ -16,6 +16,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.TextButton
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import com.akashrajeev.voicebeam.ml.WhisperModelImport
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,6 +44,19 @@ import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var importStatus by remember { mutableStateOf("Small and Turbo are optional imported files.") }
+    var importBackend by remember { mutableStateOf(AsrBackend.WHISPER_TURBO) }
+    val importWeight = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) scope.launch {
+            importStatus = "Checking and copying weight file..."
+            importStatus = withContext(Dispatchers.IO) {
+                runCatching { WhisperModelImport.importModel(context, uri, importBackend) }
+                    .fold({ "Model imported. Force stop and reopen after selecting it." }, { "Import failed: ${it.message}" })
+            }
+        }
+    }
     val s by engine.settings.collectAsState()
     val state by engine.state.collectAsState()
     Column(Modifier.fillMaxSize().background(Bg)) {
@@ -46,10 +71,28 @@ fun SettingsScreen(engine: VoiceBeamEngine, onNavigate: (Screen) -> Unit) {
             ValueRow("Language", "English")
             if (BuildConfig.DEBUG) {
                 Text("Offline ASR test - CPU only (2 threads)", color = Muted, fontSize = 12.sp)
-                Segmented(listOf("Zipformer", "Small", "Turbo"), s.asrBackend.ordinal) { i ->
-                    engine.updateSettings { it.copy(asrBackend = AsrBackend.values()[i]) }
+                val choices = listOf(AsrBackend.WHISPER_TINY, AsrBackend.WHISPER_BASE, AsrBackend.ZIPFORMER, AsrBackend.WHISPER_SMALL, AsrBackend.WHISPER_TURBO)
+                choices.forEach { backend ->
+                    val name = when (backend) {
+                        AsrBackend.WHISPER_TINY -> "Tiny.en (32 MB)"
+                        AsrBackend.WHISPER_BASE -> "Base.en (60 MB)"
+                        AsrBackend.ZIPFORMER -> "Zipformer baseline"
+                        AsrBackend.WHISPER_SMALL -> "Small (import needed)"
+                        AsrBackend.WHISPER_TURBO -> "Turbo (import needed)"
+                    }
+                    TextButton(onClick = { engine.updateSettings { it.copy(asrBackend = backend) } }) {
+                        Text((if (s.asrBackend == backend) "Selected: " else "") + name)
+                    }
                 }
-                Text("Small is the test default. Turbo is heavier and unmeasured on your phone. Both work offline. Force stop and reopen after switching.", color = Muted, fontSize = 12.sp)
+                Text("Tiny.en is the default; Base.en is packaged. English-only, windowed captions. Phone speed unmeasured. Force stop and reopen after switching.", color = Muted, fontSize = 12.sp)
+            }
+            if (BuildConfig.DEBUG) {
+                for (backend in listOf(AsrBackend.WHISPER_SMALL, AsrBackend.WHISPER_TURBO)) {
+                    TextButton(onClick = { importBackend = backend; importWeight.launch(arrayOf("*/*")) }) {
+                        Text(if (backend == AsrBackend.WHISPER_SMALL) "Import Small weight file" else "Import Turbo weight file")
+                    }
+                }
+                Text(importStatus, color = Muted, fontSize = 12.sp)
             }
             SwitchRow("Show what others say", "Shown in grey, marked Others", s.showOthersCaptions) { v -> engine.updateSettings { it.copy(showOthersCaptions = v) } }
             Text("Caption size", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp, bottom = 6.dp))

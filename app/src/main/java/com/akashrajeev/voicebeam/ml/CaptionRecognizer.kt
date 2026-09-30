@@ -7,7 +7,7 @@ import com.akashrajeev.voicebeam.core.Captions
 import java.io.File
 import kotlin.math.sqrt
 
-enum class AsrBackend { ZIPFORMER, WHISPER_SMALL, WHISPER_TURBO }
+enum class AsrBackend { ZIPFORMER, WHISPER_SMALL, WHISPER_TURBO, WHISPER_TINY, WHISPER_BASE }
 interface CaptionRecognizer {
     fun accept(samples: FloatArray): Pair<String, Boolean>
     fun resetStream()
@@ -29,6 +29,8 @@ class WhisperCaptionRecognizer(context: Context, backend: AsrBackend) : CaptionR
     private var partial = ""
     init {
         val name = when (backend) {
+            AsrBackend.WHISPER_TINY -> "ggml-tiny.en-q5_1.bin"
+            AsrBackend.WHISPER_BASE -> "ggml-base.en-q5_1.bin"
             AsrBackend.WHISPER_SMALL -> "ggml-small-q5_1.bin"
             AsrBackend.WHISPER_TURBO -> "ggml-large-v3-turbo-q5_0.bin"
             else -> error("Whisper backend required")

@@ -11,3 +11,5 @@ Public held-out sample source: https://huggingface.co/datasets/raianand/TIE_shor
 Before release: reference audit, larger accent set, identical raw/denoised comparisons, sustained concurrent camera/audio device benchmarks, backlog protection, stable partials and forced-boundary overlap, silence hallucination testing, microphone/headset routing, UI pixel inspection.
 
 Oct 1 follow-up: separate debug test app ID, fresh-install Small default, both Small and Turbo weights packaged. Release defaults remain Zipformer. Experiment CI now runs a focused packaged-model/JNI/selection screenshot smoke test, not the full product regression suite. See DEVICE-TEST.md. Main remains untouched.
+
+Superseded packaging on Oct 1: Tiny.en default, Base.en selectable and bundled; Small/Turbo are optional SHA-256-checked imports. Single debug APK artifact. See LIGHTWEIGHT-RESULTS.md. Earlier Small-default and both-weight notes describe previous commits only.
