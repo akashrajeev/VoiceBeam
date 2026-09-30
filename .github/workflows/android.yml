@@ -94,7 +94,7 @@ jobs:
           force-avd-creation: true
           disable-animations: true
           emulator-boot-timeout: 900
-          emulator-options: -partition-size 8192 -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
+          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
           script: bash scripts/ci_device_tests.sh
       - name: Instrumented tests on emulator (retry if the emulator failed to start)
         if: steps.emu1.outcome == 'failure' && hashFiles('ci/device.exit') == ''
@@ -108,7 +108,7 @@ jobs:
           force-avd-creation: true
           disable-animations: true
           emulator-boot-timeout: 900
-          emulator-options: -partition-size 8192 -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
+          emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back emulated -camera-front emulated
           script: bash scripts/ci_device_tests.sh
       - name: Collect
         if: always()
