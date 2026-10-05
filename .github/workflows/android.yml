@@ -121,6 +121,11 @@ jobs:
         with:
           name: device-out
           path: ci/
+      - name: Show failing tests in the job log
+        if: always() && steps.emu1.outcome == 'failure'
+        run: |
+          grep -nE "FAILED|Tests .* failed|AssertionError|Exception|expected" ci/device.log | head -80 || true
+          tail -60 ci/device.log || true
       - name: Fail if device tests failed
         if: always() && steps.emu1.outcome == 'failure'
         run: test -f ci/device.exit && test "$(cat ci/device.exit)" = "0"
