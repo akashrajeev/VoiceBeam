@@ -36,9 +36,7 @@ class DebugFeedTest {
     @Test fun demoFeedDrivesFacesLockAndCaptions() {
         compose.runOnUiThread { engine.updateSettings { it.copy(debugFeed = true, onboarded = true) } }
         compose.waitUntil(90_000) { engine.state.value.modelsReady }
-        if (compose.onAllNodes(androidx.compose.ui.test.hasTestTag("start")).fetchSemanticsNodes().isNotEmpty()) {
-            compose.onNodeWithTag("start").performScrollTo().assertIsEnabled().performClick()
-        }
+        tap({ engine.state.value.listening }) { compose.onNodeWithTag("start").performScrollTo().assertIsEnabled() }
         compose.waitUntil(30_000) { engine.state.value.listening }
 
         // Give the demo branch a moment, then record what the screen looks like.
@@ -56,12 +54,24 @@ class DebugFeedTest {
         } ?: error("no face to tap")
         val (tnx, tny, dims) = target
         val (iw, ih) = dims
-        compose.onNodeWithTag("faces").performTouchInput {
-            val fitScale = minOf(width / iw.toFloat(), height / ih.toFloat())
-            val fitOx = (width - iw * fitScale) / 2f
-            val fitOy = (height - ih * fitScale) / 2f
-            down(androidx.compose.ui.geometry.Offset(fitOx + tnx * iw * fitScale, fitOy + tny * ih * fitScale))
-            up()
+        // The live demo feed can keep Compose busy, so the idle sync before a touch
+        // may time out. Retry only on that, and stop once the lock has landed.
+        var locked = false
+        for (attempt in 1..5) {
+            if (compose.runOnUiThread { engine.state.value.lockedId != null }) { locked = true; break }
+            try {
+                compose.onNodeWithTag("faces").performTouchInput {
+                    val fitScale = minOf(width / iw.toFloat(), height / ih.toFloat())
+                    val fitOx = (width - iw * fitScale) / 2f
+                    val fitOy = (height - ih * fitScale) / 2f
+                    down(androidx.compose.ui.geometry.Offset(fitOx + tnx * iw * fitScale, fitOy + tny * ih * fitScale))
+                    up()
+                }
+            } catch (t: Throwable) {
+                if (t.javaClass.simpleName != "ComposeNotIdleException") throw t
+                Log.w("VBSHT", "face tap attempt $attempt: compose not idle")
+            }
+            Thread.sleep(3000)
         }
         compose.waitUntil(15_000) { engine.state.value.lockedId != null }
         android.util.Log.i("VoiceBeamTest", "locked id=" + engine.state.value.lockedId)
@@ -117,6 +127,29 @@ class DebugFeedTest {
         for (seg in segs) android.util.Log.i("VoiceBeamTest", "seg [" + seg.startMs + "-" + seg.endMs + "] truth=" + (if (isArmstrong((seg.startMs + seg.endMs) / 2)) "locked" else "other") + " target=" + seg.isTarget + " '" + seg.text.take(60) + "'")
     }
 
+    /**
+     * The live demo feed can keep Compose busy, so the idle sync inside performClick
+     * sometimes times out. Retry such clicks and stop as soon as the expected result
+     * is visible. Any other failure, or a click that never takes effect, still fails.
+     */
+    private fun tap(done: () -> Boolean, node: () -> androidx.compose.ui.test.SemanticsNodeInteraction) {
+        fun reached() = try { done() } catch (t: Throwable) { false }
+        var last: Throwable? = null
+        for (attempt in 1..5) {
+            if (reached()) return
+            try {
+                node().performClick()
+            } catch (t: Throwable) {
+                if (t.javaClass.simpleName != "ComposeNotIdleException") throw t
+                last = t
+                Log.w("VBSHT", "tap attempt $attempt: compose not idle")
+            }
+            Thread.sleep(3000)
+            if (reached()) return
+        }
+        throw AssertionError("tap had no effect after 5 attempts", last)
+    }
+
     private fun shot(name: String) {
         // The compose test clock only recomposes when the test syncs, so a raw
         // screenshot can show a stale frame (e.g. status chip lagging the lock
@@ -154,3 +187,4 @@ class DebugFeedTest {
         }
     }
 }
+
