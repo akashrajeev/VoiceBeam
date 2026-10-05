@@ -2,23 +2,20 @@
 
 **Tap a face. Hear only them.**
 
-VoiceBeam is an Android app for people who find it hard to follow one voice in a busy room: a classroom, a family dinner, an office meeting. Point the camera at the conversation, tap the person you want to follow, and VoiceBeam brings that voice forward in your earphones while the rest of the room is turned down. Live captions and session recording are on the same screen.
+VoiceBeam is an Android app for people who find it hard to follow one voice in a busy room: a classroom, a family dinner, an office meeting. Point the camera at the conversation and tap the person you want to follow. VoiceBeam locks on to that face, learns their voice, and puts live captions, a "Quiet others" control and session recording on the same screen.
 
 Everything runs on the phone. No account, no internet connection, nothing uploaded.
 
 *Built by Team Vanquishers for the iQOO Hackathon 2026 (Community App).*
 
-<p align="center">
-  <img src="docs/images/2-how-it-works.png" alt="Point the camera, tap a face, hear only them" width="900">
-</p>
 
 ## Why it matters
 
-Around 430 million people worldwide live with disabling hearing loss, a number expected to pass 700 million by 2050 (WHO). Hearing aids amplify the whole room, so in a place with several people talking the one voice you need gets lost. VoiceBeam starts from the person you want to hear instead of from the room.
+Around 430 million people worldwide live with disabling hearing loss, a number expected to pass 700 million by 2050 (WHO). Hearing aids amplify the whole room, so in a place with several people talking the one voice you need gets lost. VoiceBeam starts from the person you want to follow instead of from the room.
 
 ## Screenshots
 
-Captured on an Android phone running the Focus screen on a recorded test clip.
+Focus screen captured on an Android phone, running on a recorded test clip.
 
 | Tap a face to lock on | Locked on, voice being learned |
 |:---:|:---:|
