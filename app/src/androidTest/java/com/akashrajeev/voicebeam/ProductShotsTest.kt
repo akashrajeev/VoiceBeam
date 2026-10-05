@@ -39,29 +39,29 @@ class ProductShotsTest {
 
         // A short recording so the Sessions screen has a real row.
         val before = engine.sessionList.value.size
-        compose.onNodeWithTag("record").performClick()
+        tap({ engine.state.value.recording.active }) { compose.onNodeWithTag("record") }
         compose.waitUntil(5_000) { engine.state.value.recording.active }
         Thread.sleep(3000)
-        compose.onNodeWithTag("record").performClick()
+        tap({ !engine.state.value.recording.active }) { compose.onNodeWithTag("record") }
         compose.waitUntil(30_000) { !engine.state.value.recording.exporting && engine.sessionList.value.size > before }
 
         // Big-text caption mode.
-        compose.onNodeWithTag("captionMode").performClick()
+        tap({ hasTag("captionScreen") }) { compose.onNodeWithTag("captionMode") }
         compose.onNodeWithTag("captionScreen").assertExists()
         Thread.sleep(1000)
         shot("p1-caption-mode")
-        compose.onNodeWithText("Back to camera").performClick()
+        tap({ !hasTag("captionScreen") }) { compose.onNodeWithText("Back to camera") }
         compose.onNodeWithTag("record").assertExists()
 
         // Sessions list.
-        compose.onNodeWithText("Sessions").performClick()
+        tap({ hasTag("sessionList") }) { compose.onNodeWithText("Sessions") }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("sessionList").fetchSemanticsNodes().isNotEmpty() }
         Thread.sleep(1000)
         shot("p2-sessions")
 
         // Save-mode sheet last: nothing to dismiss afterwards, so no fragile
         // back press (a back press with no sheet open finishes the activity).
-        compose.onNodeWithText("Focus").performClick()
+        tap({ hasTag("saveMode") }) { compose.onNodeWithText("Focus") }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("saveMode").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(30_000) { !engine.state.value.recording.active && !engine.state.value.recording.exporting }
         Thread.sleep(1500)
@@ -86,6 +86,32 @@ class ProductShotsTest {
         if (!opened) android.util.Log.w("VBSHT", "save sheet never opened")
         Thread.sleep(1200)
         shot("p3-save-sheet")
+    }
+
+    private fun hasTag(tag: String) = compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+
+    /**
+     * The camera preview can keep Compose "busy", so the idle sync inside performClick
+     * sometimes times out. Retry such clicks, and stop as soon as the expected result
+     * is visible so a toggle button is never pressed twice. Any other failure, or a
+     * click that never takes effect, still fails the test.
+     */
+    private fun tap(done: () -> Boolean, node: () -> androidx.compose.ui.test.SemanticsNodeInteraction) {
+        fun reached() = try { done() } catch (t: Throwable) { false }
+        var last: Throwable? = null
+        for (attempt in 1..5) {
+            if (reached()) return
+            try {
+                node().performClick()
+            } catch (t: Throwable) {
+                if (t.javaClass.simpleName != "ComposeNotIdleException") throw t
+                last = t
+                Log.w("VBSHT", "tap attempt $attempt: compose not idle")
+            }
+            Thread.sleep(3000)
+            if (reached()) return
+        }
+        throw AssertionError("tap had no effect after 5 attempts", last)
     }
 
     private fun shot(name: String) {
@@ -125,3 +151,4 @@ class ProductShotsTest {
         }
     }
 }
+
