@@ -32,9 +32,7 @@ class ProductShotsTest {
     @Test fun captureProductScreens() {
         compose.runOnUiThread { engine.updateSettings { it.copy(onboarded = true) } }
         compose.waitUntil(90_000) { engine.state.value.modelsReady }
-        if (compose.onAllNodesWithTag("start").fetchSemanticsNodes().isNotEmpty()) {
-            compose.onNodeWithTag("start").performScrollTo().assertIsEnabled().performClick()
-        }
+        tap({ engine.state.value.listening }) { compose.onNodeWithTag("start").performScrollTo().assertIsEnabled() }
         compose.waitUntil(30_000) { engine.state.value.listening }
 
         // A short recording so the Sessions screen has a real row.
@@ -47,22 +45,22 @@ class ProductShotsTest {
 
         // Big-text caption mode.
         tap({ hasTag("captionScreen") }) { compose.onNodeWithTag("captionMode") }
-        compose.onNodeWithTag("captionScreen").assertExists()
+        idleSafe { compose.onNodeWithTag("captionScreen").assertExists() }
         Thread.sleep(1000)
         shot("p1-caption-mode")
         tap({ !hasTag("captionScreen") }) { compose.onNodeWithText("Back to camera") }
-        compose.onNodeWithTag("record").assertExists()
+        idleSafe { compose.onNodeWithTag("record").assertExists() }
 
         // Sessions list.
         tap({ hasTag("sessionList") }) { compose.onNodeWithText("Sessions") }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("sessionList").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { hasTag("sessionList") }
         Thread.sleep(1000)
         shot("p2-sessions")
 
         // Save-mode sheet last: nothing to dismiss afterwards, so no fragile
         // back press (a back press with no sheet open finishes the activity).
         tap({ hasTag("saveMode") }) { compose.onNodeWithText("Focus") }
-        compose.waitUntil(10_000) { compose.onAllNodesWithTag("saveMode").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { hasTag("saveMode") }
         compose.waitUntil(30_000) { !engine.state.value.recording.active && !engine.state.value.recording.exporting }
         Thread.sleep(1500)
         // The camera preview can keep Compose "busy" for a while, which makes the
@@ -88,7 +86,25 @@ class ProductShotsTest {
         shot("p3-save-sheet")
     }
 
-    private fun hasTag(tag: String) = compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+    private fun hasTag(tag: String) = try {
+        compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+    } catch (t: Throwable) {
+        if (t.javaClass.simpleName != "ComposeNotIdleException") throw t
+        false
+    }
+
+    /** Runs a Compose query, retrying while the live camera preview keeps Compose busy. */
+    private fun idleSafe(block: () -> Unit) {
+        var last: Throwable? = null
+        for (attempt in 1..5) {
+            try { block(); return } catch (t: Throwable) {
+                if (t.javaClass.simpleName != "ComposeNotIdleException") throw t
+                last = t
+                Thread.sleep(2000)
+            }
+        }
+        throw AssertionError("compose never became idle", last)
+    }
 
     /**
      * The camera preview can keep Compose "busy", so the idle sync inside performClick
