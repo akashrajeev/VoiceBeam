@@ -6,7 +6,7 @@ VoiceBeam is an Android app for people who find it hard to follow one voice in a
 
 Everything runs on the phone. No account, no internet connection, nothing uploaded.
 
-*Built by Team Vanquishers for the iQOO Hackathon 2026 (Community App).*
+*Built by Team Vanquishers for the iQOO Hackathon 2026 (Open Innovation).*
 
 
 ## Why it matters
@@ -112,3 +112,4 @@ Install the resulting APK on your phone (for example with `adb install`). After 
 - Akash Rajeev K V
 - Abindas P
 - Alan B
+
