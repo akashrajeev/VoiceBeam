@@ -10,7 +10,7 @@ VoiceBeam is not a generic speech enhancer. The target experience is:
 
 That requires target-speaker extraction, not only a gain gate.
 
-## What the current VoiceBeam does
+## Current VoiceBeam
 
 Current main-branch flow:
 
@@ -25,37 +25,43 @@ The target gate scales the mixed waveform. When target and interferer overlap, t
 
 | Approach | Evidence | Strength | Limitation for VoiceBeam | Decision |
 | --- | --- | --- | --- | --- |
-| DAVE / TIGER-M | 2.56M parameter two-source separator; real-world AVSE challenge system | tiny, runnable, Apache-2.0 | audio-only; two anonymous streams; released model trained for Chinese meeting speech | baseline only |
-| SEANet | 12.95 dB test SI-SDR on VoxMix; 4 AV architectures and lip features released | direct AV target extraction; MIT code | research-scale/non-causal compared with our phone goal | quality reference |
-| Swift-Net | 0.5M params; 20.68G MACs for Swift-6; 13.3 dB SI-SNRi on LRS2 and causal design | excellent low-latency AV separation direction | repository is CC BY-NC-SA; not ideal for product code | architecture inspiration |
-| 2S-AVTSE | about 1.6M params and 1.90 GMac/s; 1.46 ms M1 Pro / 2.9 ms i5-12450H per frame in reported ONNX test | explicitly designed for edge real-time AVTSE | visual input is simplified to target VVAD; paper code is not the cleanest starting point | strongest deployment reference |
-| VoiceFilter-Lite | 2.2 MB reported; 8-bit real-time on-device targeted voice separation | proven mobile TSE concept | enhances ASR features rather than reconstructing an audio waveform | design reference |
-| SpeakerBeam-SS | lightweight causal Conv-TasNet + S4D; reported 78% RTF reduction vs causal Conv-TasNet at matched performance | excellent audio-only streaming TSE direction | requires separate visual conditioning for VoiceBeam | streaming audio backbone reference |
+| DAVE / TIGER-M | 2.56M parameter two-source separator; official 2026 AVSE challenge system | tiny, runnable, Apache-2.0 | audio-only; two anonymous streams; optimized for Chinese meeting speech | sanity-check baseline |
+| PS4 | 2026 REAL-T rank 2; best submitted speaker similarity and timing F1; 71,771 real conversational training samples | explicit target-speaker extraction from mixture + enrollment; English and Chinese | audio-only; device suitability and license must be assessed separately | strongest audio-only TSE baseline |
+| Plug-and-Steer | Interspeech 2026; freezes audio-only separator and learns a small Latent Steering Matrix to route the visual target | separates high-fidelity reconstruction from noisy visual target selection | research implementation depends on larger backbones | architecture direction |
+| SEANet | 12.95 dB test SI-SDR on VoxMix in its open comparison | strong direct AV-TSE quality reference; MIT code | heavier/non-causal for our phone goal | quality reference |
+| Swift-Net | 0.5M-parameter causal AV separation family | excellent size/latency direction | CC BY-NC-SA repository/weights | architecture inspiration only |
+| 2S-AVTSE | about 1.6M parameters and 1.90 GMac/s reported; explicitly edge-oriented | closest published edge deployment shape | target cue is a compact visual VAD; separate license/code assessment needed | deployment blueprint |
+| VoiceFilter-Lite | 2.2 MB reported and 8-bit real-time mobile TSE | strongest evidence that streaming TSE can be made phone-friendly | feature/ASR-oriented, not a general waveform extractor | mobile design reference |
 
-## Chosen implementation path
+## Revised strategy
 
-Do NOT make TIGER-M the final VoiceBeam separator.
+TIGER-M is only the first sanity check.
 
-Do NOT start by porting a large Transformer AV separator to Android.
+PS4 should be benchmarked immediately after TIGER-M because it directly performs target-speaker extraction from a target enrollment utterance. Its 2026 REAL-T result makes it a much more relevant audio-only reference for VoiceBeam than a blind separator.
 
-Build a compact target-conditioned complex-ratio-mask model with:
+The main VoiceBeam research direction is a compact causal target-conditioned extractor, plus a decoupled-separation experiment inspired by Plug-and-Steer.
 
-1. mixed microphone STFT
-2. enrolled target speaker embedding
-3. selected-face visual speech cue
-4. causal temporal mask network
-5. complex mask -> target waveform
+The final architecture should make the camera-selected face influence target selection/extraction rather than merely trigger a post-separation mute.
 
-The first visual cue is the existing VoiceBeam lip-activity timeline. The next model revision can consume a learned mouth feature sequence. Keeping the input abstraction small lets the separator be trained before the phone vision stack is changed.
+## Branch prototype
 
-## Why this architecture
+CompactAVTSE is an original compact research implementation in this branch.
 
-Speaker conditioning answers: who should be extracted?
-Visual conditioning answers: when is that selected face producing speech?
-Mixture acoustics answer: what acoustic source is present?
-Complex masking answers: what target waveform should be reconstructed?
+Inputs:
+- 16 kHz mono microphone mixture
+- enrolled target speaker embedding
+- synchronized visual cue sequence
 
-This separates target extraction from the existing UI/gating logic and makes overlap a first-class training condition.
+Architecture:
+- mixture STFT
+- compact audio projection
+- speaker conditioning
+- visual conditioning
+- causal dilated TCN
+- complex ratio mask
+- iSTFT target waveform reconstruction
+
+The default configuration is under approximately 1.2M parameters for a 192-dimensional speaker embedding. The current wrapper uses centered STFT for simplicity; strict streaming STFT/overlap-add is a later deployment step.
 
 ## Training ladder
 
@@ -65,59 +71,63 @@ mixture + speaker embedding -> target waveform
 Stage B — visual-assisted TSE:
 mixture + speaker embedding + target lip activity -> target waveform
 
-Stage C — visual target embedding:
-mixture + speaker embedding + learned lip sequence -> target waveform
+Stage C — learned visual TSE:
+mixture + speaker embedding + learned synchronized mouth features -> target waveform
 
-Stage D — deployment:
-causal streaming state + ONNX/mobile runtime + quantization
+Stage D — decoupled steering:
+audio separator + visual steering module -> selected target stream
 
-Stage A is important because it gives a clean ablation: if the separator cannot extract a target with a reliable speaker embedding, adding camera features will not rescue the architecture.
+Stage E — deployment:
+causal streaming state + mobile runtime + quantization
 
-## Datasets
+Stage A is mandatory. If speaker-conditioned extraction does not work reliably, adding vision does not solve the core problem.
 
-Primary AV training/evaluation reference: VoxMix/VoxCeleb2, because SEANet provides a reproducible AV-TSE setup and reported baselines.
+## Data
 
-Primary synchronized visual sources: LRS2/LRS3 and VoxCeleb2-style talking-face data.
+Primary AV reference: VoxMix / VoxCeleb2 and LRS2/LRS3 synchronized talking-face data.
 
-Additional Indian-English stress test: construct held-out mixtures from the existing NPTEL Indian-English corpus. Keep this as a separate evaluation set rather than contaminating training.
+Real conversational TSE reference: REAL-PS4.
 
-Noise/reverb: sample speech-shaped noise, MUSAN/DNS-style noise, random RIRs, and target/interferer SNR/SIR variation.
+Indian-English evaluation: held-out NPTEL Indian-English speakers, kept completely separate from training.
 
-## Critical training examples
+Augmentation should cover SIR/SNR variation, room impulse responses, additive noise, target/interferer overlap from 0% to 100%, target-absent scenes, visual dropout, visual/audio mismatch, face occlusion and turn-away.
 
-- target louder than interferer
+## Critical evaluation conditions
+
+- target only
+- equal-energy simultaneous speech
 - interferer louder than target
-- equal-energy overlap
-- target-only speech
-- interferer-only speech while target face is visible
+- target louder than interferer
 - target absent
-- stationary background noise
-- transient non-speech events
-- visual/audio desynchronization
-- face temporarily occluded
-- target face turns away
-
-## Losses
-
-Primary: negative SI-SDR/SI-SDR improvement.
-Secondary: complex-spectrogram reconstruction loss.
-Deployment-oriented: mild mask regularization and optional speaker-embedding consistency loss.
-Do not optimize perceptual metrics first; first prove target/source fidelity.
+- wrong face selected
+- face temporarily missing
+- noisy/reverberant overlap
+- Indian-English accented speech
 
 ## Metrics
 
-Report SI-SDRi or SI-SDR, target-vs-interferer suppression, STOI, PESQ when appropriate, and downstream ASR WER.
+Separation: SI-SDR, SI-SDRi, and target-vs-interferer suppression.
 
-For streaming, also report algorithmic latency, real-time factor, peak memory, dropped frames, CPU/NPU/GPU load, and sustained thermal behavior.
+Target identity: speaker embedding cosine similarity, wrong-speaker rejection, and target-output correctness.
 
-## Final architecture target
+Speech quality: STOI, PESQ where meaningful, and downstream ASR WER.
 
-camera -> selected face -> visual encoder ----+
-                                               |
-enrolled voice -> speaker encoder -------------+-> target extractor -> target waveform -> headphones
-                                               |
-microphone mixture ----------------------------+
-                                               |
-                                               +-> ASR
+Streaming: real-time factor, algorithmic latency, end-to-end audio/caption latency, peak memory, sustained CPU/NPU/GPU use, dropped blocks and thermal/battery impact on the actual iQOO device.
 
-Deployment is a later milestone. The separator must first win the overlap experiment on desktop hardware.
+## Acceptance test
+
+> Camera selects Alice -> Alice and Bob speak simultaneously -> output contains Alice with substantially reduced Bob -> an independent speaker model identifies the output as Alice -> ASR on the output improves.
+
+Do not integrate any separator into Android until it wins this test on speaker-disjoint data.
+
+## References
+
+DAVE / TIGER-M: https://github.com/TaurenMountain/DAVE
+PS4: https://github.com/TaurenMountain/PS4
+Plug-and-Steer: https://github.com/kaistmm/Plug-and-Steer
+SEANet: https://github.com/TaoRuijie/SEANet
+Swift-Net: https://github.com/JusperLee/Swift-Net
+2S-AVTSE: https://arxiv.org/abs/2505.22229
+MeanFlow-TSE: https://arxiv.org/abs/2512.18572
+
+MeanFlow-TSE is kept as a future research option. One-step generative TSE is interesting for latency, but it is not the first deployment path.
