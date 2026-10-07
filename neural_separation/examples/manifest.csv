@@ -1,0 +1,3 @@
+target_wav,interferer_wav,speaker_embedding,visual_features
+/data/train/alice_01.wav,/data/train/bob_04.wav,/data/emb/alice.npy,/data/visual/alice_01.npy
+/data/train/carol_07.wav,/data/train/dave_03.wav,/data/emb/carol.npy,/data/visual/carol_07.npy
